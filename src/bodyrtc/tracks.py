@@ -6,19 +6,23 @@ from typing import Optional, Any
 
 import aiortc
 from aiortc.mediastreams import VIDEO_CLOCK_RATE, VIDEO_TIME_BASE
-from aiortc.contrib.media import MediaPlayer
-import av
-import numpy as np
+
+
+def video_track_id(camera_type: str, track_id: str) -> str:
+  return f"{camera_type}:{track_id}"
 
 
 class TiciVideoStreamTrack(aiortc.MediaStreamTrack):
+  """
+  Abstract video track which associates video track with camera_type
+  """
   kind = "video"
 
   def __init__(self, camera_type: str, dt: float, time_base: fractions.Fraction = VIDEO_TIME_BASE, clock_rate: int = VIDEO_CLOCK_RATE):
     assert camera_type in ["driver", "wideRoad", "road"]
     super().__init__()
     # override track id to include camera type - client needs that for identification
-    self._id: str = f"{camera_type}:{self._id}"
+    self._id: str = video_track_id(camera_type, self._id)
     self._dt: float = dt
     self._time_base: fractions.Fraction = time_base
     self._clock_rate: int = clock_rate
@@ -44,20 +48,20 @@ class TiciVideoStreamTrack(aiortc.MediaStreamTrack):
     return None
 
 
-class DummyVideoStreamTrack(TiciVideoStreamTrack):
-  def __init__(self, camera_type: str, dt: float = 1/20, color: int = 0):
-    super().__init__(camera_type, dt)
-    self._color = color
-    self._pts = 0
+class TiciTrackWrapper(aiortc.MediaStreamTrack):
+  """
+  Associates video track with camera_type
+  """
+  def __init__(self, camera_type: str, track: aiortc.MediaStreamTrack):
+    assert track.kind == "video"
+    assert not isinstance(track, TiciVideoStreamTrack)
+    super().__init__()
+    self._id = video_track_id(camera_type, track.id)
+    self._track = track
+
+  @property
+  def kind(self) -> str:
+    return self._track.kind
 
   async def recv(self):
-    self.log_debug("track sending frame %s", self._pts)
-    img = np.full((1920, 1080, 3), self._color, dtype=np.uint8)
-
-    new_frame = av.VideoFrame.from_ndarray(img, format="rgb24")
-    new_frame.pts = self._pts
-    new_frame.time_base = self._time_base
-
-    self._pts = await self.next_pts(self._pts)
-
-    return new_frame
+    return await self._track.recv()

@@ -4,6 +4,7 @@ from typing import List, Dict
 import aiortc
 
 from bodyrtc.stream import WebRTCBaseStream, WebRTCOfferStream, WebRTCAnswerStream, ConnectionProvider
+from bodyrtc.tracks import TiciVideoStreamTrack, TiciTrackWrapper
 
 
 class WebRTCStreamBuilder(abc.ABC):
@@ -58,6 +59,8 @@ class WebRTCAnswerBuilder(WebRTCStreamBuilder):
   def add_video_stream(self, camera_type: str, track: aiortc.MediaStreamTrack):
     assert camera_type not in self.video_tracks
     assert camera_type in ["driver", "wideRoad", "road"]
+    if not isinstance(track, TiciVideoStreamTrack):
+      track = TiciTrackWrapper(camera_type, track)
     self.video_tracks[camera_type] = track
 
   def add_audio_stream(self, track: aiortc.MediaStreamTrack):
