@@ -85,10 +85,10 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   subparsers = parser.add_subparsers(dest="command", required=True)
 
-  offer_parser = subparsers.add_parser("offer")
+  offer_parser = subparsers.add_parser("offer", description="Create offer stream")
   offer_parser.add_argument("cameras", metavar="CAMERA", type=str, nargs="+", default=["driver"], help="Camera types to stream")
 
-  answer_parser = subparsers.add_parser("answer")
+  answer_parser = subparsers.add_parser("answer", description="Create answer stream")
   answer_parser.add_argument("--input-video", type=str, required=False, help="Stream from video file instead")
 
   args = parser.parse_args()
