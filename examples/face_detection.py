@@ -101,6 +101,7 @@ async def run(args):
   # server will receive the offer and attempt to fulfill it
   await stream.start()
   await stream.wait_for_connection()
+  # all the tracks and channel are ready to be used at this point
 
   assert stream.has_incoming_video_track("driver") and stream.has_messaging_channel()
 
