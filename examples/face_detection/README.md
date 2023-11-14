@@ -6,5 +6,5 @@ This example streams video frames, runs face-detection model and displays window
 
 ```sh
 # pass the ip address of comma three, if running remotely (by default localhost)
-python3 face_detection.py [comma-ip-address]
+python3 face_detection.py [--host comma-ip-address]
 ```
