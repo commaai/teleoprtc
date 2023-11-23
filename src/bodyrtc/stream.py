@@ -209,6 +209,44 @@ class WebRTCOfferStream(WebRTCBaseStream):
     super().__init__(*args, **kwargs)
     self.session_provider = session_provider
 
+  def _modify_offer_groups(self, offer: aiortc.RTCSessionDescription) -> aiortc.RTCSessionDescription:
+    # use separate transport for audio and other media
+    # this fixes issues with conflicts in media header extensions
+    desc = aiortc.sdp.SessionDescription.parse(offer.sdp)
+    master_media_idx, other_media_dx = [], []
+    for i, m in enumerate(desc.media):
+      if m.kind == "audio":
+        other_media_dx.append(i)
+      else:
+        master_media_idx.append(i)
+    groups = []
+    if len(master_media_idx) > 0:
+      groups.append(aiortc.sdp.GroupDescription(semantic="BUNDLE", items=master_media_idx))
+    if len(other_media_dx) > 0:
+      groups.append(aiortc.sdp.GroupDescription(semantic="BUNDLE", items=other_media_dx))
+    desc.group = groups
+
+    return aiortc.RTCSessionDescription(sdp=str(desc), type=offer.type)
+
+  def _fix_header_extensions(self, offer: aiortc.RTCSessionDescription) -> aiortc.RTCSessionDescription:
+    desc = aiortc.sdp.SessionDescription.parse(offer.sdp)
+
+    for group in desc.group:
+      all_headers_ids = dict()
+      current_header_id = 0
+
+      for m in group.items:
+        media = desc.media[int(m)]
+        for e in media.rtp.headerExtensions:
+          if e.uri in all_headers_ids:
+            e.id = all_headers_ids[e.uri]
+          else:
+            all_headers_ids[e.uri] = current_header_id
+            e.id = current_header_id
+            current_header_id += 1
+
+    return aiortc.RTCSessionDescription(sdp=str(desc), type=offer.type)
+
   async def start(self) -> aiortc.RTCSessionDescription:
     self._add_consumer_transceivers()
     if self.should_add_data_channel:
