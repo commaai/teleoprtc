@@ -41,6 +41,7 @@ class WebRTCBaseStream(abc.ABC):
     self.incoming_message_handlers: List[MessageHandler] = []
 
     self.incoming_media_ready_event = asyncio.Event()
+    self.messaging_channel_ready_event = asyncio.Event()
     self.connection_attempted_event = asyncio.Event()
     self.connection_stopped_event = asyncio.Event()
 
@@ -81,6 +82,11 @@ class WebRTCBaseStream(abc.ABC):
 
     for handler in self.incoming_message_handlers:
       channel.on("message", handler)
+
+    if channel.readyState == "open":
+      self.messaging_channel_ready_event.set()
+    else:
+      channel.on("open", lambda: self.messaging_channel_ready_event.set())
     self.messaging_channel = channel
 
   def _force_codec(self, transceiver: aiortc.RTCRtpTransceiver, codec: str, stream_type: str):
@@ -184,6 +190,8 @@ class WebRTCBaseStream(abc.ABC):
       raise ValueError("Connection failed.")
     if self.expected_number_of_incoming_media:
       await self.incoming_media_ready_event.wait()
+    if self.messaging_channel is not None:
+      await self.messaging_channel_ready_event.wait()
 
   async def wait_for_disconnection(self):
     await self.connection_stopped_event.wait()
