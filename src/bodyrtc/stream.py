@@ -67,13 +67,31 @@ class WebRTCBaseStream(abc.ABC):
     if self.expected_incoming_audio:
       self.peer_connection.addTransceiver("audio", direction="recvonly")
 
+  def _find_trackless_transceiver(self, kind: str) -> Optional[aiortc.RTCRtpTransceiver]:
+    transceivers = self.peer_connection.getTransceivers()
+    target_transceiver = None
+    for t in transceivers:
+      if t.kind == kind and t.sender.track is None:
+        target_transceiver = t
+        break
+
+    return target_transceiver
+
   def _add_producer_tracks(self):
     for track in self.outgoing_video_tracks:
+      target_transceiver = self._find_trackless_transceiver(track.kind)
+      if target_transceiver is None:
+        self.peer_connection.addTransceiver(track.kind, direction="sendonly")
+
       sender = self.peer_connection.addTrack(track)
       if hasattr(track, "codec_preference") and track.codec_preference() is not None:
         transceiver = next(t for t in self.peer_connection.getTransceivers() if t.sender == sender)
         self._force_codec(transceiver, track.codec_preference(), "video")
     for track in self.outgoing_audio_tracks:
+      target_transceiver = self._find_trackless_transceiver(track.kind)
+      if target_transceiver is None:
+        self.peer_connection.addTransceiver(track.kind, direction="sendonly")
+
       self.peer_connection.addTrack(track)
 
   def _add_messaging_channel(self, channel: Optional[aiortc.RTCDataChannel] = None):
