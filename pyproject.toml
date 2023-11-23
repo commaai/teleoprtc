@@ -16,7 +16,7 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 dependencies = [
-  "aiortc>=1.5.0",
+  "aiortc @ git+https://github.com/aiortc/aiortc.git",
   "aiohttp>=3.7.0",
   "av>=9.0.0,<11.0.0",
   "numpy>=1.19.0",
