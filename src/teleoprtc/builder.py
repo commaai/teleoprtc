@@ -3,8 +3,8 @@ from typing import List, Dict
 
 import aiortc
 
-from bodyrtc.stream import WebRTCBaseStream, WebRTCOfferStream, WebRTCAnswerStream, ConnectionProvider
-from bodyrtc.tracks import TiciVideoStreamTrack, TiciTrackWrapper
+from teleoprtc.stream import WebRTCBaseStream, WebRTCOfferStream, WebRTCAnswerStream, ConnectionProvider
+from teleoprtc.tracks import TiciVideoStreamTrack, TiciTrackWrapper
 
 
 class WebRTCStreamBuilder(abc.ABC):

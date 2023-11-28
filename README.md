@@ -1,3 +1,3 @@
-# bodyrtc
+# teleoprtc
 
-Set of abstractions for webRTC communication with comma body.
+Set of abstractions for webRTC communication with the comma three.

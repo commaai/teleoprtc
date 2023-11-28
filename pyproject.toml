@@ -3,10 +3,10 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bodyrtc"
+name = "teleoprtc"
 version = "1.0.0"
 authors = [{ name="Vehicle Researcher", email="user@comma.ai" }]
-description = "Comma body webRTC abstractions"
+description = "Comma webRTC abstractions"
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.11"
@@ -23,8 +23,8 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/commaai/body-webrtc"
-"Bug Tracker" = "https://github.com/commaai/body-webrtc/issues"
+"Homepage" = "https://github.com/commaai/teleop-webrtc"
+"Bug Tracker" = "https://github.com/commaai/teleop-webrtc/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

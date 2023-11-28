@@ -8,7 +8,7 @@ import aiohttp
 import cv2
 import pygame
 
-from bodyrtc import WebRTCOfferBuilder, StreamingOffer
+from teleoprtc import WebRTCOfferBuilder, StreamingOffer
 
 
 def pygame_should_quit():

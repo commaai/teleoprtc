@@ -9,9 +9,9 @@ import logging
 import aiortc
 from aiortc.mediastreams import VideoStreamTrack, AudioStreamTrack
 
-from bodyrtc import WebRTCOfferBuilder, WebRTCAnswerBuilder
-from bodyrtc.stream import StreamingOffer
-from bodyrtc.info import parse_info_from_offer
+from teleoprtc import WebRTCOfferBuilder, WebRTCAnswerBuilder
+from teleoprtc.stream import StreamingOffer
+from teleoprtc.info import parse_info_from_offer
 
 
 async def async_input():
