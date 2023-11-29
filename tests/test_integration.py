@@ -33,7 +33,8 @@ class SimpleAnswerProvider:
     answer = await self.stream.start()
 
     return answer
-  
+
+
 class TestStreamIntegration(unittest.IsolatedAsyncioTestCase):
   @parameterized.expand([
     # name, recv_cameras, recv_audio, messaging
