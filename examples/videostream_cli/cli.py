@@ -71,11 +71,9 @@ async def run_offer(args):
   print("Connection established and all tracks are ready")
 
   video_tracks = [stream.get_incoming_video_track(cam, False) for cam in args.cameras]
-  audio_track, channel = None, None
+  audio_track = None
   if stream.has_incoming_audio_track():
     audio_track = stream.get_incoming_audio_track(False)
-  if stream.has_messaging_channel():
-    channel = stream.get_messaging_channel()
   while True:
     try:
       frames = await asyncio.gather(*[track.recv() for track in video_tracks])

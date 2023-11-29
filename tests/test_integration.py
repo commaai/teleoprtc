@@ -3,7 +3,6 @@
 import asyncio
 import unittest
 
-import aiortc
 from aiortc.mediastreams import AudioStreamTrack, VideoStreamTrack
 from parameterized import parameterized
 
@@ -54,13 +53,13 @@ class TestStreamIntegration(unittest.IsolatedAsyncioTestCase):
       offer_builder.add_messaging()
     stream = offer_builder.stream()
 
-    offer = await stream.start()
+    _ = await stream.start()
     self.assertTrue(stream.is_started)
 
     try:
       async with asyncio.timeout(2):
         await stream.wait_for_connection()
-    except asyncio.TimeoutError as e:
+    except asyncio.TimeoutError:
       self.fail("Timed out waiting for connection")
     self.assertTrue(stream.is_connected_and_ready)
 
@@ -80,7 +79,7 @@ class TestStreamIntegration(unittest.IsolatedAsyncioTestCase):
       try:
         async with asyncio.timeout(1):
           await track.recv()
-      except asyncio.TimeoutError as e:
+      except asyncio.TimeoutError:
         self.fail("Timed out waiting for audio frame")
 
     for cam in cameras:
@@ -94,7 +93,7 @@ class TestStreamIntegration(unittest.IsolatedAsyncioTestCase):
         try:
           async with asyncio.timeout(1):
             await stream.get_incoming_video_track(cam, False).recv()
-        except asyncio.TimeoutError as e:
+        except asyncio.TimeoutError:
           self.fail("Timed out waiting for video frame")
 
     await stream.stop()

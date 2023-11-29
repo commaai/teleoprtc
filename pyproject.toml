@@ -24,7 +24,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "parameterized>=0.8"
+  "parameterized>=0.8",
+  "pre-commit"
 ]
 
 [project.urls]
