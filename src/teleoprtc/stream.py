@@ -7,6 +7,8 @@ from typing import Callable, Awaitable, Dict, List, Any, Optional
 import aiortc
 from aiortc.contrib.media import MediaRelay
 
+from teleoprtc.tracks import parse_video_track_id
+
 
 @dataclasses.dataclass
 class StreamingOffer:
@@ -123,11 +125,7 @@ class WebRTCBaseStream(abc.ABC):
   def _on_incoming_track(self, track: aiortc.MediaStreamTrack):
     self._log_debug("got track: %s %s", track.kind, track.id)
     if track.kind == "video":
-      parts = track.id.split(":") # format: "camera_type:camera_id"
-      if len(parts) < 2:
-        return
-
-      camera_type = parts[0]
+      camera_type, _ = parse_video_track_id(track.id)
       if camera_type in self.expected_incoming_camera_types:
         self.incoming_camera_tracks[camera_type] = track
     elif track.kind == "audio":
@@ -194,7 +192,8 @@ class WebRTCBaseStream(abc.ABC):
   def is_started(self) -> bool:
     return self.peer_connection is not None and \
            self.peer_connection.localDescription is not None and \
-           self.peer_connection.remoteDescription is not None
+           self.peer_connection.remoteDescription is not None and \
+           self.peer_connection.connectionState != "closed"
 
   @property
   def is_connected_and_ready(self) -> bool:
@@ -203,6 +202,7 @@ class WebRTCBaseStream(abc.ABC):
            self.expected_number_of_incoming_media != 0 and self.incoming_media_ready_event.is_set()
 
   async def wait_for_connection(self):
+    assert self.is_started
     await self.connection_attempted_event.wait()
     if self.peer_connection.connectionState != 'connected':
       raise ValueError("Connection failed.")
@@ -212,6 +212,7 @@ class WebRTCBaseStream(abc.ABC):
       await self.messaging_channel_ready_event.wait()
 
   async def wait_for_disconnection(self):
+    assert self.is_connected_and_ready
     await self.connection_stopped_event.wait()
 
   async def stop(self):

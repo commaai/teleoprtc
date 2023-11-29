@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 import fractions
-from typing import Optional, Any
+from typing import Optional, Tuple, Any
 
 import aiortc
 from aiortc.mediastreams import VIDEO_CLOCK_RATE, VIDEO_TIME_BASE
@@ -10,6 +10,15 @@ from aiortc.mediastreams import VIDEO_CLOCK_RATE, VIDEO_TIME_BASE
 
 def video_track_id(camera_type: str, track_id: str) -> str:
   return f"{camera_type}:{track_id}"
+
+
+def parse_video_track_id(track_id: str) -> Tuple[str, str]:
+  parts = track_id.split(":")
+  if len(parts) != 2:
+    raise ValueError(f"Invalid video track id: {track_id}")
+
+  camera_type, track_id = parts
+  return camera_type, track_id
 
 
 class TiciVideoStreamTrack(aiortc.MediaStreamTrack):
