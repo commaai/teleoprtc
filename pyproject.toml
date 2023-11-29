@@ -30,6 +30,3 @@ dev = [
 [project.urls]
 "Homepage" = "https://github.com/commaai/teleop-webrtc"
 "Bug Tracker" = "https://github.com/commaai/teleop-webrtc/issues"
-
-[tool.setuptools.packages.find]
-where = ["src"]
