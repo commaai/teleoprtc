@@ -3,11 +3,9 @@
 import unittest
 
 import aiortc
-from aiortc.mediastreams import AudioStreamTrack, VideoStreamTrack
-from parameterized import parameterized
+from aiortc.mediastreams import AudioStreamTrack
 
 from teleoprtc.builder import WebRTCOfferBuilder, WebRTCAnswerBuilder
-from teleoprtc.stream import StreamingOffer
 from teleoprtc.info import parse_info_from_offer
 from teleoprtc.tracks import TiciVideoStreamTrack
 
@@ -40,7 +38,7 @@ class TestOfferStream(unittest.IsolatedAsyncioTestCase):
 
     try:
       _ = await stream.start()
-    except Exception as e:
+    except Exception:
       pass
     
     info = parse_info_from_offer(capture.offer.sdp)
@@ -55,7 +53,7 @@ class TestOfferStream(unittest.IsolatedAsyncioTestCase):
 
     try:
       _ = await stream.start()
-    except Exception as e:
+    except Exception:
       pass
     
     info = parse_info_from_offer(capture.offer.sdp)
@@ -70,7 +68,7 @@ class TestOfferStream(unittest.IsolatedAsyncioTestCase):
 
     try:
       _ = await stream.start()
-    except Exception as e:
+    except Exception:
       pass
     
     info = parse_info_from_offer(capture.offer.sdp)
