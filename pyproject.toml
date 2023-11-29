@@ -22,6 +22,11 @@ dependencies = [
   "numpy>=1.19.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "parameterized>=0.8"
+]
+
 [project.urls]
 "Homepage" = "https://github.com/commaai/teleop-webrtc"
 "Bug Tracker" = "https://github.com/commaai/teleop-webrtc/issues"
