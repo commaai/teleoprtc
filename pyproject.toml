@@ -29,5 +29,5 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/commaai/teleop-webrtc"
-"Bug Tracker" = "https://github.com/commaai/teleop-webrtc/issues"
+"Homepage" = "https://github.com/commaai/teleoprtc"
+"Bug Tracker" = "https://github.com/commaai/teleoprtc/issues"
