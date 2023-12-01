@@ -161,7 +161,7 @@ class WebRTCBaseStream(abc.ABC):
   def has_messaging_channel(self) -> bool:
     return self.messaging_channel is not None
 
-  def get_incoming_video_track(self, camera_type: str, buffered: bool) -> aiortc.MediaStreamTrack:
+  def get_incoming_video_track(self, camera_type: str, buffered: bool = False) -> aiortc.MediaStreamTrack:
     assert camera_type in self.incoming_camera_tracks, "Video tracks are not enabled on this stream"
     assert self.is_started, "Stream must be started"
 
@@ -169,7 +169,7 @@ class WebRTCBaseStream(abc.ABC):
     relay_track = self.media_relay.subscribe(track, buffered=buffered)
     return relay_track
 
-  def get_incoming_audio_track(self, buffered: bool) -> aiortc.MediaStreamTrack:
+  def get_incoming_audio_track(self, buffered: bool = False) -> aiortc.MediaStreamTrack:
     assert len(self.incoming_audio_tracks) > 0, "Audio tracks are not enabled on this stream"
     assert self.is_started, "Stream must be started"
 
