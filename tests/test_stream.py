@@ -18,13 +18,13 @@ class OfferCapture:
     self.offer = offer
     raise Exception("Offer captured")
 
-  
+
 class DummyH264VideoStreamTrack(TiciVideoStreamTrack):
   kind = "video"
 
   async def recv(self):
     raise NotImplementedError()
-  
+
   def codec_preference(self):
     return "H264"
 
@@ -40,7 +40,7 @@ class TestOfferStream(unittest.IsolatedAsyncioTestCase):
       _ = await stream.start()
     except Exception:
       pass
-    
+
     info = parse_info_from_offer(capture.offer.sdp)
     self.assertTrue(info.expected_audio_track)
     self.assertFalse(info.incoming_audio_track)
@@ -55,7 +55,7 @@ class TestOfferStream(unittest.IsolatedAsyncioTestCase):
       _ = await stream.start()
     except Exception:
       pass
-    
+
     info = parse_info_from_offer(capture.offer.sdp)
     self.assertFalse(info.expected_audio_track)
     self.assertTrue(info.incoming_audio_track)
@@ -70,11 +70,11 @@ class TestOfferStream(unittest.IsolatedAsyncioTestCase):
       _ = await stream.start()
     except Exception:
       pass
-    
+
     info = parse_info_from_offer(capture.offer.sdp)
     self.assertTrue(info.incoming_datachannel)
 
-  
+
 class TestAnswerStream(unittest.IsolatedAsyncioTestCase):
   async def test_codec_preference(self):
     offer_sdp = """v=0
@@ -142,12 +142,12 @@ a=ice-ufrag:1234
 a=ice-pwd:1234
 a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
 a=setup:actpass"""
-      
+
     builder = WebRTCAnswerBuilder(offer_sdp)
     builder.add_video_stream("road", DummyH264VideoStreamTrack("road", 0.05))
     stream = builder.stream()
 
-    with self.assertRaises(Exception):
+    with self.assertRaises(ValueError):
       _ = await stream.start()
 
 

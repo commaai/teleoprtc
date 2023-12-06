@@ -23,7 +23,7 @@ class TestTracks(unittest.TestCase):
     class VideoStream(TiciVideoStreamTrack):
       async def recv(self):
         raise NotImplementedError()
-      
+
     track = VideoStream("driver", 0.1)
     camera_type, _ = parse_video_track_id(track.id)
     self.assertEqual("driver", camera_type)

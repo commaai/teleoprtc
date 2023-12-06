@@ -68,7 +68,7 @@ class TestStreamIntegration(unittest.IsolatedAsyncioTestCase):
       channel = stream.get_messaging_channel()
       self.assertIsNotNone(channel)
       self.assertEqual(channel.readyState, "open")
-  
+
     self.assertEqual(stream.has_incoming_audio_track(), recv_audio)
     if stream.has_incoming_audio_track():
       track = stream.get_incoming_audio_track(False)
@@ -103,4 +103,4 @@ class TestStreamIntegration(unittest.IsolatedAsyncioTestCase):
 
 
 if __name__ == '__main__':
-  unittest.main()   
+  unittest.main()
