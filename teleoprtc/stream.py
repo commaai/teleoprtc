@@ -2,7 +2,7 @@ import abc
 import asyncio
 import dataclasses
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Any
 from collections.abc import Callable, Awaitable
 
 import aiortc

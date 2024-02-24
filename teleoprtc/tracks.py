@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 import fractions
-from typing import Optional, Tuple, Any
+from typing import Any
 
 import aiortc
 from aiortc.mediastreams import VIDEO_CLOCK_RATE, VIDEO_TIME_BASE
