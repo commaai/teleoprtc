@@ -199,7 +199,7 @@ class WebRTCBaseStream(abc.ABC):
   def is_connected_and_ready(self) -> bool:
     return self.peer_connection is not None and \
            self.peer_connection.connectionState == "connected" and \
-           self.expected_number_of_incoming_media != 0 and self.incoming_media_ready_event.is_set()
+           (self.expected_number_of_incoming_media == 0 or self.incoming_media_ready_event.is_set())
 
   async def wait_for_connection(self):
     assert self.is_started
@@ -212,7 +212,7 @@ class WebRTCBaseStream(abc.ABC):
       await self.messaging_channel_ready_event.wait()
 
   async def wait_for_disconnection(self):
-    assert self.is_connected_and_ready
+    assert self.is_connected_and_ready, "Stream is not connected/ready yet (make sure wait_for_connection was awaited)"
     await self.connection_stopped_event.wait()
 
   async def stop(self):
