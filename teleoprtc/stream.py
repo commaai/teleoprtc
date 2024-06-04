@@ -2,8 +2,7 @@ import abc
 import asyncio
 import dataclasses
 import logging
-from typing import Any, Dict, List, Optional
-from collections.abc import Callable, Awaitable
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import aiortc
 from aiortc.contrib.media import MediaRelay
