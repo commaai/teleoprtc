@@ -35,7 +35,7 @@ dev = [
 # https://beta.ruff.rs/docs/configuration/#using-pyprojecttoml
 [tool.ruff]
 line-length = 160
-target-version="py311"
+target-version="py38"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "PIE", "C4", "ISC", "RUF008", "RUF100", "A", "B", "TID251"]
