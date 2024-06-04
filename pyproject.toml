@@ -18,7 +18,7 @@ classifiers = [
 dependencies = [
   "aiortc>=1.6.0",
   "aiohttp>=3.7.0",
-  "av>=9.0.0,<11.0.0",
+  "av>=11.0.0,<13.0.0",
   "numpy>=1.19.0",
 ]
 
