@@ -2,7 +2,7 @@ import abc
 import asyncio
 import dataclasses
 import logging
-from typing import Any
+from typing import Any, Optional
 from collections.abc import Callable, Awaitable
 
 import aiortc
@@ -32,7 +32,7 @@ class WebRTCBaseStream(abc.ABC):
     self.media_relay = MediaRelay()
     self.expected_incoming_camera_types = consumed_camera_types
     self.expected_incoming_audio = consume_audio
-    self.expected_number_of_incoming_media: int | None = None
+    self.expected_number_of_incoming_media: Optional[int] = None
 
     self.incoming_camera_tracks: dict[str, aiortc.MediaStreamTrack] = dict()
     self.incoming_audio_tracks: list[aiortc.MediaStreamTrack] = []
@@ -40,7 +40,7 @@ class WebRTCBaseStream(abc.ABC):
     self.outgoing_audio_tracks: list[aiortc.MediaStreamTrack] = audio_producer_tracks
 
     self.should_add_data_channel = should_add_data_channel
-    self.messaging_channel: aiortc.RTCDataChannel | None = None
+    self.messaging_channel: Optional[aiortc.RTCDataChannel] = None
     self.incoming_message_handlers: list[MessageHandler] = []
 
     self.incoming_media_ready_event = asyncio.Event()
@@ -70,7 +70,7 @@ class WebRTCBaseStream(abc.ABC):
     if self.expected_incoming_audio:
       self.peer_connection.addTransceiver("audio", direction="recvonly")
 
-  def _find_trackless_transceiver(self, kind: str) -> aiortc.RTCRtpTransceiver | None:
+  def _find_trackless_transceiver(self, kind: str) -> Optional[aiortc.RTCRtpTransceiver]:
     transceivers = self.peer_connection.getTransceivers()
     target_transceiver = None
     for t in transceivers:
@@ -97,7 +97,7 @@ class WebRTCBaseStream(abc.ABC):
 
       self.peer_connection.addTrack(track)
 
-  def _add_messaging_channel(self, channel: aiortc.RTCDataChannel | None = None):
+  def _add_messaging_channel(self, channel: Optional[aiortc.RTCDataChannel] = None):
     if not channel:
       channel = self.peer_connection.createDataChannel("data", ordered=True)
 

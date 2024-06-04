@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 import fractions
-from typing import Any
+from typing import Any, Optional
 
 import aiortc
 from aiortc.mediastreams import VIDEO_CLOCK_RATE, VIDEO_TIME_BASE
@@ -35,7 +35,7 @@ class TiciVideoStreamTrack(aiortc.MediaStreamTrack):
     self._dt: float = dt
     self._time_base: fractions.Fraction = time_base
     self._clock_rate: int = clock_rate
-    self._start: float | None = None
+    self._start: Optional[float] = None
     self._logger = logging.getLogger("WebRTCStream")
 
   def log_debug(self, msg: Any, *args):
@@ -53,7 +53,7 @@ class TiciVideoStreamTrack(aiortc.MediaStreamTrack):
 
     return pts
 
-  def codec_preference(self) -> str | None:
+  def codec_preference(self) -> Optional[str]:
     return None
 
 
