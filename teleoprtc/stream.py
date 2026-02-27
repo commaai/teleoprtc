@@ -145,11 +145,14 @@ class WebRTCBaseStream(abc.ABC):
 
   def _parse_incoming_streams(self, remote_sdp: str):
     desc = aiortc.sdp.SessionDescription.parse(remote_sdp)
-    sending_medias = [m for m in desc.media if m.direction in ["sendonly", "sendrecv"]]
+    # Datachannels may include a direction attribute (e.g. Firefox uses sendrecv),
+    # but they are tracked separately via messaging_channel and should not be
+    # counted as generic sending media.
+    sending_medias = [m for m in desc.media if m.kind in ["audio", "video"] and m.direction in ["sendonly", "sendrecv"]]
     incoming_media_count = len(sending_medias)
     if not self.should_add_data_channel:
       channel_medias = [m for m in desc.media if m.kind == "application"]
-      incoming_media_count += len(channel_medias)
+      incoming_media_count += int(len(channel_medias) > 0)
     self.expected_number_of_incoming_media = incoming_media_count
 
   def has_incoming_video_track(self, camera_type: str) -> bool:
