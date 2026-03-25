@@ -260,9 +260,23 @@ class WebRTCAnswerStream(WebRTCBaseStream):
 
     return codecs
 
+  def _validate_codecs(self):
+    desc = aiortc.sdp.SessionDescription.parse(self.session.sdp)
+    video_media = [m for m in desc.media if m.kind == "video"]
+    offer_codecs = set()
+    for m in video_media:
+      for c in m.rtp.codecs:
+        offer_codecs.add(c.mimeType)
+
+    for codec in self._probe_video_codecs():
+      codec_mime = f"video/{codec.upper()}"
+      if codec_mime not in offer_codecs:
+        raise ValueError(f"Preferred codec {codec_mime} is not available in the offer")
+
   async def start(self) -> aiortc.RTCSessionDescription:
     assert self.peer_connection.remoteDescription is None, "Connection already established"
 
+    self._validate_codecs()
     self._add_consumer_transceivers()
 
     self._parse_incoming_streams(remote_sdp=self.session.sdp)
