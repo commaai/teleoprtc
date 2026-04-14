@@ -260,24 +260,32 @@ class WebRTCAnswerStream(WebRTCBaseStream):
 
     return codecs
 
-  def _validate_codecs(self):
-    desc = aiortc.sdp.SessionDescription.parse(self.session.sdp)
-    video_media = [m for m in desc.media if m.kind == "video"]
-    offer_codecs = set()
-    for m in video_media:
-      for c in m.rtp.codecs:
-        offer_codecs.add(c.mimeType)
+  def _override_incoming_video_codecs(self, remote_sdp: str, codecs: List[str]) -> str:
+    desc = aiortc.sdp.SessionDescription.parse(remote_sdp)
+    codec_mimes = [f"video/{c}" for c in codecs]
+    for m in desc.media:
+      if m.kind != "video":
+        continue
 
-    for codec in self._probe_video_codecs():
-      codec_mime = f"video/{codec.upper()}"
-      if codec_mime not in offer_codecs:
-        raise ValueError(f"Preferred codec {codec_mime} is not available in the offer")
+      preferred_codecs: List[aiortc.RTCRtpCodecParameters] = [c for c in m.rtp.codecs if c.mimeType in codec_mimes]
+      if len(preferred_codecs) == 0:
+        raise ValueError(f"None of {preferred_codecs} codecs is supported in remote SDP")
+
+      m.rtp.codecs = preferred_codecs
+      m.fmt = [c.payloadType for c in preferred_codecs]
+
+    return str(desc)
 
   async def start(self) -> aiortc.RTCSessionDescription:
     assert self.peer_connection.remoteDescription is None, "Connection already established"
 
-    self._validate_codecs()
     self._add_consumer_transceivers()
+
+    # since we sent already encoded frames in some cases (e.g. livestream video tracks are in H264), we need to force aiortc to actually use it
+    # we do that by overriding supported codec information on incoming sdp
+    preferred_codecs = self._probe_video_codecs()
+    if len(preferred_codecs) > 0:
+      self.session.sdp = self._override_incoming_video_codecs(self.session.sdp, preferred_codecs)
 
     self._parse_incoming_streams(remote_sdp=self.session.sdp)
     await self.peer_connection.setRemoteDescription(self.session)
