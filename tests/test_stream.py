@@ -151,3 +151,29 @@ a=setup:actpass"""
 
     with pytest.raises(ValueError):
       _ = await stream.start()
+
+  async def test_parse_incoming_streams_datachannel_counting(self):
+    offer_sdp = """v=0
+o=- 3910274679 3910274679 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=group:BUNDLE 0 1
+m=video 9 UDP/TLS/RTP/SAVPF 97
+c=IN IP4 0.0.0.0
+a=recvonly
+a=mid:0
+a=ice-ufrag:1234
+a=ice-pwd:1234
+a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
+a=setup:actpass
+m=application 9 UDP/DTLS/SCTP webrtc-datachannel
+c=IN IP4 0.0.0.0
+a=sendrecv
+a=mid:1
+a=sctp-port:5000"""
+
+    builder = WebRTCAnswerBuilder(offer_sdp)
+    stream = builder.stream()
+    stream._parse_incoming_streams(builder.offer_sdp)
+
+    assert stream.expected_number_of_incoming_media == 1
