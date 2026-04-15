@@ -2,7 +2,6 @@
 
 import pytest
 
-import aiortc
 from aiortc.mediastreams import AudioStreamTrack
 
 from teleoprtc.builder import WebRTCOfferBuilder, WebRTCAnswerBuilder
