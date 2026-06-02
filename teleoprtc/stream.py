@@ -274,6 +274,10 @@ class WebRTCAnswerStream(WebRTCBaseStream):
       m.rtp.codecs = preferred_codecs
       m.fmt = [c.payloadType for c in preferred_codecs]
 
+    for m in desc.media:
+      if m.kind in ["audio", "video"] and m.rtcp_mux:
+        m.rtcp_host = "0.0.0.0"
+
     return str(desc)
 
   async def start(self) -> aiortc.RTCSessionDescription:

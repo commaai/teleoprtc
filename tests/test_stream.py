@@ -119,6 +119,43 @@ a=setup:actpass"""
     codecs = video_desc.rtp.codecs
     assert codecs[0].mimeType == "video/H264"
 
+  async def test_sdp_offer_with_mDNS_hostname(self):
+    offer_sdp = """v=0
+o=mozilla...THIS_IS_SDPARTA-99.0 3533862303229651784 0 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=fingerprint:sha-256 8B:F4:4E:05:FF:55:5B:A5:A2:F2:D8:EE:DA:67:CA:05:8D:88:7D:41:5D:47:49:0D:79:BF:77:ED:6B:99:52:83
+a=group:BUNDLE 0
+a=ice-options:trickle
+a=msid-semantic:WMS *
+m=video 46047 UDP/TLS/RTP/SAVPF 97
+c=IN IP4 67.208.245.10
+a=recvonly
+a=mid:0
+a=rtcp:36842 IN IP4 16d435ed-eb25-4cf2-aa3d-1dd75004bfc5.local
+a=rtcp-mux
+a=ssrc-group:FID 1303546896 3784011659
+a=ssrc:1303546896 cname:a59185ac-c115-48d3-b39b-db7d615a6966
+a=ssrc:3784011659 cname:a59185ac-c115-48d3-b39b-db7d615a6966
+a=rtpmap:97 VP8/90000
+a=rtcp-fb:97 nack
+a=rtcp-fb:97 nack pli
+a=rtcp-fb:97 goog-remb
+a=rtpmap:99 H264/90000
+a=rtcp-fb:99 nack
+a=rtcp-fb:99 nack pli
+a=rtcp-fb:99 goog-remb
+a=fmtp:99 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
+a=ice-ufrag:1234
+a=ice-pwd:1234
+a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
+a=setup:actpass"""
+
+    builder = WebRTCAnswerBuilder(offer_sdp)
+    builder.add_video_stream("road", DummyH264VideoStreamTrack("road", 0.05))
+    stream = builder.stream()
+    _ = await stream.start()
+
   async def test_fail_if_preferred_codec_not_in_offer(self):
     offer_sdp = """v=0
 o=- 3910274679 3910274679 IN IP4 0.0.0.0
