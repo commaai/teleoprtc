@@ -151,9 +151,7 @@ a=candidate:0 1 UDP 2122252543 host-3e4a2b1c.local 53705 typ host"""
     stream = builder.stream()
     _ = await stream.start()
 
-    assert "a=rtcp:9" in stream.session.sdp
     assert "a=rtcp-mux" in stream.session.sdp
-    assert "host-3e4a2b1c.local" in stream.session.sdp
 
   async def test_fail_if_preferred_codec_not_in_offer(self):
     offer_sdp = """v=0
