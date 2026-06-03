@@ -274,8 +274,9 @@ class WebRTCAnswerStream(WebRTCBaseStream):
       m.rtp.codecs = preferred_codecs
       m.fmt = [c.payloadType for c in preferred_codecs]
 
+    # overwrite mDNS hostnames which crash sdp serialization
     for m in desc.media:
-      if m.kind in ["audio", "video"] and m.rtcp_mux:
+      if m.kind in ["audio", "video"] and m.rtcp_mux and m.rtcp_host and m.rtcp_host.endswith(".local"):
         m.rtcp_host = "0.0.0.0"
 
     return str(desc)
