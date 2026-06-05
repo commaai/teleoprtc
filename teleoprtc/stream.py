@@ -27,7 +27,10 @@ class WebRTCBaseStream(abc.ABC):
                video_producer_tracks: List[aiortc.MediaStreamTrack],
                audio_producer_tracks: List[aiortc.MediaStreamTrack],
                should_add_data_channel: bool):
-    self.peer_connection = aiortc.RTCPeerConnection()
+    self.config = aiortc.RTCConfiguration(iceServers=[
+      aiortc.RTCIceServer(urls=["stun:stun.l.google.com:19302"])
+    ])
+    self.peer_connection = aiortc.RTCPeerConnection(configuration=self.config)
     self.media_relay = MediaRelay()
     self.expected_incoming_camera_types = consumed_camera_types
     self.expected_incoming_audio = consume_audio
