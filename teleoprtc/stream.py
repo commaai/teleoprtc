@@ -274,9 +274,15 @@ class WebRTCAnswerStream(WebRTCBaseStream):
       m.rtp.codecs = preferred_codecs
       m.fmt = [c.payloadType for c in preferred_codecs]
 
-    # overwrite mDNS hostnames which crash sdp serialization
+    # aiortc only serializes a=rtcp-mux if rtcp_port is set. Firefox offers
+    # can omit a=rtcp while still advertising rtcp-mux, so synthesize the
+    # placeholder RTCP address before re-serializing the filtered SDP.
     for m in desc.media:
-      if m.kind in ["audio", "video"] and m.rtcp_mux and m.rtcp_host and m.rtcp_host.endswith(".local"):
+      if m.kind not in ["audio", "video"] or not m.rtcp_mux:
+        continue
+      if m.rtcp_port is None:
+        m.rtcp_port = 9
+      if m.rtcp_host and m.rtcp_host.endswith(".local"):
         m.rtcp_host = "0.0.0.0"
 
     return str(desc)

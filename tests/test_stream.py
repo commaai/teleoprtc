@@ -156,6 +156,41 @@ a=setup:actpass"""
     stream = builder.stream()
     _ = await stream.start()
 
+  async def test_sdp_offer_with_mDNS_candidate_and_no_rtcp_attribute(self):
+    offer_sdp = """v=0
+o=mozilla...THIS_IS_SDPARTA-99.0 3533862303229651784 0 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=fingerprint:sha-256 8B:F4:4E:05:FF:55:5B:A5:A2:F2:D8:EE:DA:67:CA:05:8D:88:7D:41:5D:47:49:0D:79:BF:77:ED:6B:99:52:83
+a=group:BUNDLE 0
+a=ice-options:trickle
+a=msid-semantic:WMS *
+m=video 9 UDP/TLS/RTP/SAVPF 97 99
+c=IN IP4 0.0.0.0
+a=recvonly
+a=mid:0
+a=rtcp-mux
+a=candidate:0 1 UDP 2122252543 16d435ed-eb25-4cf2-aa3d-1dd75004bfc5.local 46047 typ host
+a=rtpmap:97 VP8/90000
+a=rtpmap:99 H264/90000
+a=fmtp:99 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
+a=ice-ufrag:1234
+a=ice-pwd:1234
+a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
+a=setup:actpass"""
+
+    builder = WebRTCAnswerBuilder(offer_sdp)
+    builder.add_video_stream("road", DummyH264VideoStreamTrack("road", 0.05))
+    stream = builder.stream()
+
+    rewritten_sdp = stream._override_incoming_video_codecs(stream.session.sdp, ["H264"])
+    sdp_desc = aiortc.sdp.SessionDescription.parse(rewritten_sdp)
+    video_desc = [m for m in sdp_desc.media if m.kind == "video"][0]
+
+    assert "a=rtcp-mux" in rewritten_sdp
+    assert video_desc.rtcp_mux
+    assert video_desc.rtcp_port == 9
+
   async def test_fail_if_preferred_codec_not_in_offer(self):
     offer_sdp = """v=0
 o=- 3910274679 3910274679 IN IP4 0.0.0.0
