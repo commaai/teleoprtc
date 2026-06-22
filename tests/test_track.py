@@ -2,8 +2,6 @@
 
 import pytest
 
-import aiortc
-
 from teleoprtc.tracks import video_track_id, parse_video_track_id, TiciVideoStreamTrack, TiciTrackWrapper
 
 
@@ -29,6 +27,13 @@ class TestTracks:
     assert "driver" == camera_type
 
   def test_tici_wrapper_id(self):
-    track = TiciTrackWrapper("driver", aiortc.mediastreams.VideoStreamTrack())
+    class VideoStream:
+      kind = "video"
+      id = "test"
+
+      async def recv(self):
+        raise NotImplementedError()
+
+    track = TiciTrackWrapper("driver", VideoStream())
     camera_type, _ = parse_video_track_id(track.id)
     assert "driver" == camera_type
