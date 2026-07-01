@@ -20,6 +20,20 @@ ConnectionProvider = Callable[[StreamingOffer], Awaitable[aiortc.RTCSessionDescr
 MessageHandler = Callable[[bytes], Awaitable[None]]
 
 
+AV_SYNC_MEDIA_KINDS = {"audio", "video"}
+
+
+def _split_audio_video_sender_stream_ids(peer_connection: aiortc.RTCPeerConnection) -> None:
+  senders = [s for s in peer_connection.getSenders() if s.kind in AV_SYNC_MEDIA_KINDS and s.track is not None]
+  if {s.kind for s in senders} != AV_SYNC_MEDIA_KINDS:
+    return
+
+  for sender in senders:
+    suffix = f"-{sender.kind}"
+    if not sender._stream_id.endswith(suffix):
+      sender._stream_id += suffix
+
+
 class WebRTCBaseStream(abc.ABC):
   def __init__(self,
                consumed_camera_types: List[str],
@@ -230,6 +244,7 @@ class WebRTCOfferStream(WebRTCBaseStream):
     if self.should_add_data_channel:
       self._add_messaging_channel()
     self._add_producer_tracks()
+    _split_audio_video_sender_stream_ids(self.peer_connection)
 
     offer = await self.peer_connection.createOffer()
     await self.peer_connection.setLocalDescription(offer)
@@ -283,14 +298,15 @@ class WebRTCAnswerStream(WebRTCBaseStream):
 
     # since we sent already encoded frames in some cases (e.g. livestream video tracks are in H264), we need to force aiortc to actually use it
     # we do that by overriding supported codec information on incoming sdp
-    preferred_codecs = self._probe_video_codecs()
-    if len(preferred_codecs) > 0:
-      self.session.sdp = self._override_incoming_video_codecs(self.session.sdp, preferred_codecs)
+    # preferred_codecs = self._probe_video_codecs()
+    # if len(preferred_codecs) > 0:
+    #   self.session.sdp = self._override_incoming_video_codecs(self.session.sdp, preferred_codecs)
 
     self._parse_incoming_streams(remote_sdp=self.session.sdp)
     await self.peer_connection.setRemoteDescription(self.session)
 
     self._add_producer_tracks()
+    _split_audio_video_sender_stream_ids(self.peer_connection)
 
     answer = await self.peer_connection.createAnswer()
     await self.peer_connection.setLocalDescription(answer)
