@@ -134,11 +134,15 @@ class WebRTCBaseStream(abc.ABC):
     for camera_type in self.expected_incoming_camera_types:
       media = Description.Video(camera_type, Description.Direction.RecvOnly)
       media.add_h264_codec(96)
-      self._consumer_tracks.append(self.peer_connection.add_track(media))
+      track = self.peer_connection.add_track(media)
+      self._consumer_tracks.append(track)
+      self.incoming_camera_tracks[camera_type] = track
     if self.expected_incoming_audio:
       media = Description.Audio("audio", Description.Direction.RecvOnly)
       media.add_opus_codec(111)
-      self._consumer_tracks.append(self.peer_connection.add_track(media))
+      track = self.peer_connection.add_track(media)
+      self._consumer_tracks.append(track)
+      self.incoming_audio_tracks.append(track)
 
   def _find_offer_video(self, remote_sdp: str) -> Tuple[str, int]:
     desc = Description(remote_sdp, Description.Type.Offer)
@@ -373,6 +377,7 @@ class WebRTCOfferStream(WebRTCBaseStream):
     remote_answer = await self.session_provider(streaming_offer)
     self._parse_incoming_streams(remote_sdp=remote_answer.sdp)
     self.peer_connection.set_remote_description(Description(remote_answer.sdp, Description.Type.Answer))
+    self._on_after_media()
     actual_answer = self.peer_connection.remote_description()
 
     return RTCSessionDescription(str(actual_answer), actual_answer.type_string())
