@@ -7,7 +7,7 @@ This example streams video frames, runs face-detection model and displays window
 Install the example-only display/detection dependencies first:
 
 ```sh
-python3 -m pip install opencv-python pygame av
+python3 -m pip install "opencv-python<5" pygame av
 ```
 
 ```sh
