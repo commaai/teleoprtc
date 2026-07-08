@@ -12,6 +12,7 @@ from libdatachannel import (
   Description,
   FrameInfo,
   H264RtpPacketizer,
+  IceServer,
   NalUnit,
   PeerConnection,
   PliHandler,
@@ -76,6 +77,7 @@ class WebRTCBaseStream(abc.ABC):
     config = Configuration()
     config.force_media_transport = True
     config.disable_auto_negotiation = True
+    config.ice_servers = [IceServer("stun:stun.l.google.com:19302")]
     if bind_address is not None:
       config.bind_address = bind_address
 
