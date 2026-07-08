@@ -236,12 +236,12 @@ class WebRTCBaseStream(abc.ABC):
   def has_messaging_channel(self) -> bool:
     return self.messaging_channel is not None
 
-  def get_incoming_video_track(self, camera_type: str, buffered: bool = False) -> Track:
+  def get_incoming_video_track(self, camera_type: str) -> Track:
     assert camera_type in self.incoming_camera_tracks, "Video tracks are not enabled on this stream"
     assert self.is_started, "Stream must be started"
     return self.incoming_camera_tracks[camera_type]
 
-  def get_incoming_audio_track(self, buffered: bool = False) -> Track:
+  def get_incoming_audio_track(self) -> Track:
     assert len(self.incoming_audio_tracks) > 0, "Audio tracks are not enabled on this stream"
     assert self.is_started, "Stream must be started"
     return self.incoming_audio_tracks[0]
@@ -315,8 +315,7 @@ class WebRTCBaseStream(abc.ABC):
         await task
     self._sender_tasks.clear()
     self.peer_connection.close()
-    if hasattr(self.peer_connection, "reset_callbacks"):
-      self.peer_connection.reset_callbacks()
+    self.peer_connection.reset_callbacks()
     self.messaging_channel = None
     self.incoming_camera_tracks.clear()
     self.incoming_audio_tracks.clear()

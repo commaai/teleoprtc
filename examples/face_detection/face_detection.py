@@ -115,7 +115,7 @@ async def run_face_detection(stream, camera: str):
   screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
   pygame.display.set_caption("Face detection demo")
 
-  receiver = H264FrameReceiver(stream.get_incoming_video_track(camera, buffered=False))
+  receiver = H264FrameReceiver(stream.get_incoming_video_track(camera))
   detector = FaceDetector()
 
   try:

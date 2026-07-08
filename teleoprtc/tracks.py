@@ -1,17 +1,11 @@
-import asyncio
 import fractions
 import logging
-import time
 import uuid
 from typing import Any, Optional, Tuple
 
 
 VIDEO_CLOCK_RATE = 90000
 VIDEO_TIME_BASE = fractions.Fraction(1, VIDEO_CLOCK_RATE)
-
-
-class MediaStreamError(Exception):
-  pass
 
 
 def video_track_id(camera_type: str, track_id: str) -> str:
@@ -52,18 +46,6 @@ class TiciVideoStreamTrack:
 
   def log_debug(self, msg: Any, *args):
     self._logger.debug(f"{type(self)}() {msg}", *args)
-
-  async def next_pts(self, current_pts) -> float:
-    pts: float = current_pts + self._dt * self._clock_rate
-
-    data_time = pts * self._time_base
-    if self._start is None:
-      self._start = time.time() - data_time
-    else:
-      wait_time = self._start + data_time - time.time()
-      await asyncio.sleep(wait_time)
-
-    return pts
 
   async def recv(self):
     raise NotImplementedError()
