@@ -17,8 +17,6 @@ classifiers = [
 ]
 dependencies = [
   "libdatachannel-py>=2026.1.0.dev2",
-  "av>=11.0.0,<13.0.0",
-  "numpy>=1.19.0",
 ]
 
 [project.optional-dependencies]
