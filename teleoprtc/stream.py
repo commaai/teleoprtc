@@ -41,31 +41,6 @@ ConnectionProvider = Callable[[StreamingOffer], Awaitable[RTCSessionDescription]
 MessageHandler = Callable[[Union[bytes, str]], None]
 
 
-class RTCDataChannelAdapter:
-  def __init__(self, channel: DataChannel):
-    self._channel = channel
-
-  @property
-  def label(self) -> str:
-    return self._channel.label()
-
-  @property
-  def readyState(self) -> str:
-    if self._channel.is_open():
-      return "open"
-    if self._channel.is_closed():
-      return "closed"
-    return "connecting"
-
-  def is_open(self) -> bool:
-    return self._channel.is_open()
-
-  def send(self, data: Union[bytes, str]) -> None:
-    if not self._channel.is_open():
-      raise RuntimeError("Data channel is not open")
-    self._channel.send(data)
-
-
 class WebRTCBaseStream(abc.ABC):
   def __init__(self,
                consumed_camera_types: List[str],
@@ -92,9 +67,8 @@ class WebRTCBaseStream(abc.ABC):
     self.outgoing_audio_tracks = audio_producer_tracks
 
     self.should_add_data_channel = should_add_data_channel
-    self.messaging_channel: Optional[RTCDataChannelAdapter] = None
+    self.messaging_channel: Optional[DataChannel] = None
     self.incoming_message_handlers: List[MessageHandler] = []
-    self._raw_messaging_channel: Optional[DataChannel] = None
     self._consumer_tracks: List[Track] = []
     self._sender_tasks: List[asyncio.Task] = []
     self._track_state: List[Tuple[Track, TiciVideoStreamTrack, RtpPacketizationConfig]] = []
@@ -192,9 +166,7 @@ class WebRTCBaseStream(abc.ABC):
   def _add_messaging_channel(self, channel: Optional[DataChannel] = None):
     if channel is None:
       channel = self.peer_connection.create_data_channel("data")
-
-    self._raw_messaging_channel = channel
-    self.messaging_channel = RTCDataChannelAdapter(channel)
+    self.messaging_channel = channel
 
     def on_message(message: Union[bytes, str]):
       for handler in list(self.incoming_message_handlers):
@@ -274,7 +246,7 @@ class WebRTCBaseStream(abc.ABC):
     assert self.is_started, "Stream must be started"
     return self.incoming_audio_tracks[0]
 
-  def get_messaging_channel(self) -> RTCDataChannelAdapter:
+  def get_messaging_channel(self) -> DataChannel:
     assert self.messaging_channel is not None, "Messaging channel is not enabled on this stream"
     assert self.is_started, "Stream must be started"
     return self.messaging_channel
@@ -346,7 +318,6 @@ class WebRTCBaseStream(abc.ABC):
     if hasattr(self.peer_connection, "reset_callbacks"):
       self.peer_connection.reset_callbacks()
     self.messaging_channel = None
-    self._raw_messaging_channel = None
     self.incoming_camera_tracks.clear()
     self.incoming_audio_tracks.clear()
     self._consumer_tracks.clear()
