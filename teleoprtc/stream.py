@@ -12,6 +12,7 @@ from libdatachannel import (
   Description,
   FrameInfo,
   H264RtpPacketizer,
+  H265RtpPacketizer,
   IceServer,
   NalUnit,
   PeerConnection,
@@ -120,40 +121,51 @@ class WebRTCBaseStream(abc.ABC):
       self._consumer_tracks.append(track)
       self.incoming_audio_tracks.append(track)
 
-  def _find_offer_video(self, remote_sdp: str) -> Tuple[str, int]:
+  def _find_offer_video(self, remote_sdp: str, codec: str, used_mids: set[str]) -> Tuple[str, int]:
     desc = Description(remote_sdp, Description.Type.Offer)
     for i in range(desc.media_count()):
       media = desc.media(i)
-      if media is None or media.type() != "video":
+      if media is None or media.type() != "video" or media.mid() in used_mids:
         continue
       for payload_type in media.payload_types():
         with contextlib.suppress(ValueError):
           rtp_map = media.rtp_map(payload_type)
-          if rtp_map is not None and rtp_map.format.upper() == "H264":
+          if rtp_map is not None and rtp_map.format.upper() == codec:
             return media.mid(), payload_type
-    raise ValueError("Remote SDP does not offer H264 video")
+    raise ValueError(f"Remote SDP does not offer an unused {codec} video track")
 
-  def _make_video_media(self, track: TiciVideoStreamTrack, remote_sdp: str) -> Tuple[Description.Video, int, int, str]:
-    mid, payload_type = self._find_offer_video(remote_sdp)
+  def _make_video_media(self, track: TiciVideoStreamTrack, remote_sdp: str,
+                        used_mids: set[str]) -> Tuple[Description.Video, int, int, str, str]:
+    codec = (track.codec_preference() or "H264").upper()
+    if codec not in ("H264", "H265"):
+      raise ValueError(f"Unsupported video codec: {codec}")
+
+    mid, payload_type = self._find_offer_video(remote_sdp, codec, used_mids)
+    used_mids.add(mid)
     ssrc = random.randint(1, 0xFFFFFFFF)
     cname = f"teleoprtc-{random.getrandbits(32):08x}"
     stream_id = f"stream-{random.getrandbits(32):08x}"
     media = Description.Video(mid, Description.Direction.SendOnly)
-    media.add_h264_codec(payload_type)
+    if codec == "H265":
+      media.add_h265_codec(payload_type)
+    else:
+      media.add_h264_codec(payload_type)
     media.add_ssrc(ssrc, cname, stream_id, track.id)
-    return media, ssrc, payload_type, cname
+    return media, ssrc, payload_type, cname, codec
 
   def _add_producer_tracks(self, remote_sdp: Optional[str] = None):
+    used_mids: set[str] = set()
     for track in self.outgoing_video_tracks:
-      media, ssrc, payload_type, cname = self._make_video_media(track, remote_sdp or "")
+      media, ssrc, payload_type, cname, codec = self._make_video_media(track, remote_sdp or "", used_mids)
       rtc_track = self.peer_connection.add_track(media)
 
-      rtp_config = RtpPacketizationConfig(ssrc, cname, payload_type, H264RtpPacketizer.CLOCK_RATE)
+      packetizer_type = H265RtpPacketizer if codec == "H265" else H264RtpPacketizer
+      rtp_config = RtpPacketizationConfig(ssrc, cname, payload_type, packetizer_type.CLOCK_RATE)
       rtp_config.start_timestamp = random.randint(0, 0xFFFFFFFF)
       rtp_config.timestamp = rtp_config.start_timestamp
       rtp_config.sequence_number = random.randint(0, 0xFFFF)
 
-      packetizer = H264RtpPacketizer(NalUnit.Separator.LongStartSequence, rtp_config, 1200)
+      packetizer = packetizer_type(NalUnit.Separator.LongStartSequence, rtp_config, 1200)
       packetizer.add_to_chain(RtcpSrReporter(rtp_config))
       packetizer.add_to_chain(PliHandler(track.request_keyframe))
       packetizer.add_to_chain(RtcpNackResponder())

@@ -4,7 +4,7 @@ import contextlib
 
 import pytest
 
-from libdatachannel import Description
+from libdatachannel import Description, H265RtpPacketizer
 
 from teleoprtc.builder import WebRTCOfferBuilder, WebRTCAnswerBuilder
 from teleoprtc.info import parse_info_from_offer
@@ -28,6 +28,38 @@ class DummyH264VideoStreamTrack(TiciVideoStreamTrack):
 
   def codec_preference(self):
     return "H264"
+
+
+class DummyH265VideoStreamTrack(DummyH264VideoStreamTrack):
+  def codec_preference(self):
+    return "H265"
+
+
+def h265_offer_sdp(*mids: str) -> str:
+  media_sections = []
+  for index, mid in enumerate(mids):
+    payload_type = 103 + index
+    media_sections.append(f"""m=video 9 UDP/TLS/RTP/SAVPF {payload_type}
+c=IN IP4 0.0.0.0
+a=recvonly
+a=mid:{mid}
+a=rtcp:9 IN IP4 0.0.0.0
+a=rtcp-mux
+a=rtpmap:{payload_type} H265/90000
+a=rtcp-fb:{payload_type} nack
+a=rtcp-fb:{payload_type} nack pli
+a=ice-ufrag:1234
+a=ice-pwd:1234
+a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
+a=setup:actpass""")
+
+  return f"""v=0
+o=- 3910274679 3910274679 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=group:BUNDLE {' '.join(mids)}
+a=msid-semantic:WMS *
+{'\n'.join(media_sections)}"""
 
 
 @pytest.mark.asyncio
@@ -68,6 +100,23 @@ class TestOfferStream:
 
 @pytest.mark.asyncio
 class TestAnswerStream:
+  async def test_h265_codec_preference_for_two_tracks(self):
+    offer_sdp = h265_offer_sdp("0", "1")
+    builder = WebRTCAnswerBuilder(offer_sdp)
+    builder.add_video_stream("wideRoad", DummyH265VideoStreamTrack("wideRoad", 0.05))
+    builder.add_video_stream("driver", DummyH265VideoStreamTrack("driver", 0.05))
+    stream = builder.stream()
+    try:
+      stream.peer_connection.set_remote_description(Description(offer_sdp, Description.Type.Offer))
+      stream._add_producer_tracks(offer_sdp)
+
+      video_descs = [state[0].description() for state in stream._track_state]
+      assert [media.mid() for media in video_descs] == ["0", "1"]
+      assert all(media.rtp_map(media.payload_types()[0]).format == "H265" for media in video_descs)
+      assert all(isinstance(state[0].get_media_handler(), H265RtpPacketizer) for state in stream._track_state)
+    finally:
+      await stream.stop()
+
   async def test_codec_preference(self):
     offer_sdp = """v=0
 o=- 3910274679 3910274679 IN IP4 0.0.0.0
