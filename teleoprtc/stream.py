@@ -165,7 +165,7 @@ class WebRTCBaseStream(abc.ABC):
       rtp_config.timestamp = rtp_config.start_timestamp
       rtp_config.sequence_number = random.randint(0, 0xFFFF)
 
-      packetizer = packetizer_type(NalUnit.Separator.LongStartSequence, rtp_config, 1200)
+      packetizer = packetizer_type(NalUnit.Separator.StartSequence, rtp_config, 1200)
       packetizer.add_to_chain(RtcpSrReporter(rtp_config))
       packetizer.add_to_chain(PliHandler(track.request_keyframe))
       packetizer.add_to_chain(RtcpNackResponder())
