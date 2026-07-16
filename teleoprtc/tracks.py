@@ -30,10 +30,8 @@ class TiciVideoStreamTrack:
   def __init__(self, camera_type: str, dt: float, time_base: fractions.Fraction = VIDEO_TIME_BASE, clock_rate: int = VIDEO_CLOCK_RATE):
     assert camera_type in ["driver", "wideRoad", "road"]
     self._id: str = video_track_id(camera_type, str(uuid.uuid4()))
-    self._dt: float = dt
     self._time_base: fractions.Fraction = time_base
     self._clock_rate: int = clock_rate
-    self._start: Optional[float] = None
     self._logger = logging.getLogger("WebRTCStream")
     self.readyState = "live"
 
@@ -49,9 +47,6 @@ class TiciVideoStreamTrack:
 
   async def recv(self):
     raise NotImplementedError()
-
-  def codec_preference(self) -> Optional[str]:
-    return None
 
   def request_keyframe(self) -> None:
     pass

@@ -288,30 +288,41 @@ class WebRTCBaseStream(abc.ABC):
 
   async def _send_track_loop(self, rtc_track: Track, producer_track: TiciVideoStreamTrack, rtp_config: RtpPacketizationConfig):
     while True:
-      if producer_track.readyState != "live":
-        break
       if not rtc_track.is_open():
         await asyncio.sleep(0.01)
         continue
 
-      packet = await producer_track.recv()
-      data = bytes(packet)
-      if not data:
-        continue
+      try:
+        packet = await producer_track.recv()
+        data = bytes(packet)
+        if not data:
+          continue
 
-      pts = int(packet.pts or 0)
-      timestamp = (rtp_config.start_timestamp + pts) & 0xFFFFFFFF
-      rtc_track.send_frame(data, FrameInfo(timestamp))
+        pts = int(packet.pts or 0)
+        timestamp = (rtp_config.start_timestamp + pts) & 0xFFFFFFFF
+        rtc_track.send_frame(data, FrameInfo(timestamp))
+      except asyncio.CancelledError:
+        raise
+      except Exception:
+        self.logger.exception("Error in send track loop for track %s", producer_track.id)
+        self._set_event(self.connection_stopped_event)
+        break
 
   async def _receiver_report_loop(self):
     while True:
       for camera_type, (rtc_track, ssrc) in self._receiver_report_tracks.items():
         for _ in range(32):
-          message = rtc_track.receive()
-          if message is None: # go until queue empty (bounded to 32)
+          try:
+            message = rtc_track.receive()
+            if message is None: # go until queue empty (bounded to 32)
+              break
+            if isinstance(message, bytes):
+              self._update_receiver_report(camera_type, ssrc, message)
+          except asyncio.CancelledError:
+            raise
+          except Exception:
+            self.logger.exception("Error receiving report for %s", camera_type)
             break
-          if isinstance(message, bytes):
-            self._update_receiver_report(camera_type, ssrc, message)
       await asyncio.sleep(0.05)
 
   def _start_sender_tasks(self):

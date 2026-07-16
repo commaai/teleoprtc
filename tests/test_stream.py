@@ -26,9 +26,6 @@ class DummyH264VideoStreamTrack(TiciVideoStreamTrack):
   async def recv(self):
     raise NotImplementedError()
 
-  def codec_preference(self):
-    return "H264"
-
 
 @pytest.mark.asyncio
 class TestOfferStream:
