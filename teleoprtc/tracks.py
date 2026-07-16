@@ -1,7 +1,7 @@
 import fractions
 import logging
 import uuid
-from typing import Any, Optional, Tuple
+from typing import Any, Tuple
 
 
 VIDEO_CLOCK_RATE = 90000
