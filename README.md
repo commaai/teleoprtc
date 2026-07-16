@@ -4,8 +4,15 @@ Set of abstractions for webRTC communication, used in [openpilot](https://github
 
 # installation
 
-install release version via `pip install teleoprtc`
-install from source for most up to date features via `pip install git+https://github.com/commaai/teleoprtc.git`
+install release version via
+```python
+pip install teleoprtc
+```
+
+install from source for most up to date features via 
+```python
+pip install "git+https://github.com/commaai/teleoprtc.git"
+```
 
 # usage
 
