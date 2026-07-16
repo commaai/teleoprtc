@@ -22,6 +22,7 @@ from libdatachannel import (
   Track,
 )
 
+from teleoprtc.decoder import RtcpReceiverReport, _decode_receiver_reports
 from teleoprtc.tracks import TiciVideoStreamTrack, parse_video_track_id
 
 
@@ -72,6 +73,8 @@ class WebRTCBaseStream(abc.ABC):
     self._consumer_tracks: List[Track] = []
     self._sender_tasks: List[asyncio.Task] = []
     self._track_state: List[Tuple[Track, TiciVideoStreamTrack, RtpPacketizationConfig]] = []
+    self._receiver_reports: Dict[str, RtcpReceiverReport] = {}
+    self._receiver_report_tracks: Dict[str, Tuple[Track, int]] = {}
 
     self.incoming_media_ready_event = asyncio.Event()
     self.messaging_channel_ready_event = asyncio.Event()
@@ -158,6 +161,10 @@ class WebRTCBaseStream(abc.ABC):
       packetizer.add_to_chain(PliHandler(track.request_keyframe))
       packetizer.add_to_chain(RtcpNackResponder())
       rtc_track.set_media_handler(packetizer)
+
+      camera_type, _ = parse_video_track_id(track.id)
+      rtc_track.reset_callbacks()
+      self._receiver_report_tracks[camera_type] = (rtc_track, ssrc)
       self._track_state.append((rtc_track, track, rtp_config))
 
     if self.outgoing_audio_tracks:
@@ -208,6 +215,11 @@ class WebRTCBaseStream(abc.ABC):
     if channel.label() == "data" and self.messaging_channel is None:
       self._add_messaging_channel(channel)
 
+  def _update_receiver_report(self, camera_type: str, ssrc: int, message: bytes) -> None:
+    for report in _decode_receiver_reports(message):
+      if report.ssrc == ssrc:
+        self._receiver_reports[camera_type] = report
+
   def _on_after_media(self):
     if self.expected_number_of_incoming_media is not None and self._number_of_incoming_media >= self.expected_number_of_incoming_media:
       self._set_event(self.incoming_media_ready_event)
@@ -251,6 +263,9 @@ class WebRTCBaseStream(abc.ABC):
     assert self.is_started, "Stream must be started"
     return self.messaging_channel
 
+  def get_receiver_report_stats(self) -> Dict[str, RtcpReceiverReport]:
+    return dict(self._receiver_reports)
+
   def set_message_handler(self, message_handler: MessageHandler):
     self.incoming_message_handlers.append(message_handler)
 
@@ -288,9 +303,22 @@ class WebRTCBaseStream(abc.ABC):
       timestamp = (rtp_config.start_timestamp + pts) & 0xFFFFFFFF
       rtc_track.send_frame(data, FrameInfo(timestamp))
 
+  async def _receiver_report_loop(self):
+    while True:
+      for camera_type, (rtc_track, ssrc) in self._receiver_report_tracks.items():
+        for _ in range(32):
+          message = rtc_track.receive()
+          if message is None: # go until queue empty (bounded to 32)
+            break
+          if isinstance(message, bytes):
+            self._update_receiver_report(camera_type, ssrc, message)
+      await asyncio.sleep(0.05)
+
   def _start_sender_tasks(self):
     for rtc_track, producer_track, rtp_config in self._track_state:
       self._sender_tasks.append(asyncio.create_task(self._send_track_loop(rtc_track, producer_track, rtp_config)))
+    if self._track_state:
+      self._sender_tasks.append(asyncio.create_task(self._receiver_report_loop()))
 
   async def wait_for_connection(self):
     assert self.is_started
@@ -321,6 +349,8 @@ class WebRTCBaseStream(abc.ABC):
     self.incoming_audio_tracks.clear()
     self._consumer_tracks.clear()
     self._track_state.clear()
+    self._receiver_reports.clear()
+    self._receiver_report_tracks.clear()
 
   @abc.abstractmethod
   async def start(self) -> RTCSessionDescription:
