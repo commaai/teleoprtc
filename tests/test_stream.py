@@ -27,6 +27,37 @@ class DummyH264VideoStreamTrack(TiciVideoStreamTrack):
     raise NotImplementedError()
 
 
+def video_media_by_mid(sdp: str, description_type: Description.Type) -> dict[str, Description.Media]:
+  desc = Description(sdp, description_type)
+  media: dict[str, Description.Media] = {}
+  for i in range(desc.media_count()):
+    m = desc.media(i)
+    if m is not None and m.type() == "video":
+      media[m.mid()] = m
+  return media
+
+
+def video_sections_by_mid(sdp: str) -> dict[str, str]:
+  sections: dict[str, list[str]] = {}
+  current_mid = None
+  current_lines: list[str] = []
+  for line in sdp.splitlines():
+    if line.startswith("m="):
+      if current_mid is not None:
+        sections[current_mid] = current_lines
+      current_mid = None
+      current_lines = [line] if line.startswith("m=video") else []
+      continue
+    if not current_lines:
+      continue
+    current_lines.append(line)
+    if line.startswith("a=mid:"):
+      current_mid = line.removeprefix("a=mid:")
+  if current_mid is not None:
+    sections[current_mid] = current_lines
+  return {mid: "\n".join(lines) for mid, lines in sections.items()}
+
+
 @pytest.mark.asyncio
 class TestOfferStream:
   async def test_offer_stream_sdp_recvonly_audio(self):
@@ -111,6 +142,48 @@ a=setup:actpass"""
       assert codecs[0] == "H264"
     finally:
       await stream.stop()
+
+  async def test_multi_video_answer_matches_offer_mids(self):
+    capture = OfferCapture()
+    offer_builder = WebRTCOfferBuilder(capture)
+    offer_builder.offer_to_receive_video_stream("wideRoad")
+    offer_builder.offer_to_receive_video_stream("driver")
+    offer_stream = offer_builder.stream()
+
+    try:
+      _ = await offer_stream.start()
+    except Exception:
+      pass
+    finally:
+      await offer_stream.stop()
+
+    assert capture.offer.video == ["wideRoad", "driver"]
+    offer_media = video_media_by_mid(capture.offer.sdp, Description.Type.Offer)
+    assert set(offer_media.keys()) == {"wideRoad", "driver"}
+
+    answer_builder = WebRTCAnswerBuilder(capture.offer.sdp)
+    tracks = {
+      "wideRoad": DummyH264VideoStreamTrack("wideRoad", 0.05),
+      "driver": DummyH264VideoStreamTrack("driver", 0.05),
+    }
+    for camera, track in tracks.items():
+      answer_builder.add_video_stream(camera, track)
+    answer_stream = answer_builder.stream()
+
+    try:
+      answer = await answer_stream.start()
+      answer_media = video_media_by_mid(answer.sdp, Description.Type.Answer)
+      assert set(answer_media.keys()) == {"wideRoad", "driver"}
+
+      for camera, track in tracks.items():
+        section = video_sections_by_mid(answer.sdp)[camera]
+        assert "a=ssrc:" in section
+        assert track.id in section
+        for other_camera, other_track in tracks.items():
+          if other_camera != camera:
+            assert other_track.id not in section
+    finally:
+      await answer_stream.stop()
 
   async def test_fail_if_preferred_codec_not_in_offer(self):
     offer_sdp = """v=0

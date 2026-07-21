@@ -123,8 +123,9 @@ class WebRTCBaseStream(abc.ABC):
       self._consumer_tracks.append(track)
       self.incoming_audio_tracks.append(track)
 
-  def _find_offer_video(self, remote_sdp: str) -> Tuple[str, int]:
+  def _find_offer_video(self, remote_sdp: str, camera_type: str) -> Tuple[str, int]:
     desc = Description(remote_sdp, Description.Type.Offer)
+    h264_matches: List[Tuple[str, int]] = []
     for i in range(desc.media_count()):
       media = desc.media(i)
       if media is None or media.type() != "video":
@@ -133,11 +134,16 @@ class WebRTCBaseStream(abc.ABC):
         with contextlib.suppress(ValueError):
           rtp_map = media.rtp_map(payload_type)
           if rtp_map is not None and rtp_map.format.upper() == "H264":
-            return media.mid(), payload_type
-    raise ValueError("Remote SDP does not offer H264 video")
+            h264_matches.append((media.mid(), payload_type))
+            if media.mid() == camera_type:
+              return media.mid(), payload_type
+    if len(h264_matches) == 1:
+      return h264_matches[0]
+    raise ValueError(f"Remote SDP does not offer H264 video for {camera_type}")
 
   def _make_video_media(self, track: TiciVideoStreamTrack, remote_sdp: str) -> Tuple[Description.Video, int, int, str]:
-    mid, payload_type = self._find_offer_video(remote_sdp)
+    camera_type, _ = parse_video_track_id(track.id)
+    mid, payload_type = self._find_offer_video(remote_sdp, camera_type)
     ssrc = random.randint(1, 0xFFFFFFFF)
     cname = f"teleoprtc-{random.getrandbits(32):08x}"
     stream_id = f"stream-{random.getrandbits(32):08x}"
