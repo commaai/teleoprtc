@@ -9,6 +9,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 from libdatachannel import (
   Configuration,
   DataChannel,
+  DataChannelInit,
   Description,
   FrameInfo,
   H264RtpPacketizer,
@@ -49,6 +50,7 @@ class WebRTCBaseStream(abc.ABC):
                video_producer_tracks: List[TiciVideoStreamTrack],
                audio_producer_tracks: List[Any],
                should_add_data_channel: bool,
+               data_channel_init: Optional[DataChannelInit] = None,
                bind_address: Optional[str] = None):
     config = Configuration()
     config.force_media_transport = True
@@ -68,6 +70,7 @@ class WebRTCBaseStream(abc.ABC):
     self.outgoing_audio_tracks = audio_producer_tracks
 
     self.should_add_data_channel = should_add_data_channel
+    self.data_channel_init = data_channel_init
     self.messaging_channel: Optional[DataChannel] = None
     self.incoming_message_handlers: List[MessageHandler] = []
     self._consumer_tracks: List[Track] = []
@@ -178,7 +181,7 @@ class WebRTCBaseStream(abc.ABC):
 
   def _add_messaging_channel(self, channel: Optional[DataChannel] = None):
     if channel is None:
-      channel = self.peer_connection.create_data_channel("data")
+      channel = self.peer_connection.create_data_channel("data", self.data_channel_init)
     self.messaging_channel = channel
 
     def on_message(message: Union[bytes, str]):

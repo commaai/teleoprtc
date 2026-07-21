@@ -1,6 +1,8 @@
 import abc
 from typing import Dict, List, Optional
 
+from libdatachannel import DataChannelInit
+
 from teleoprtc.stream import RTCSessionDescription, WebRTCBaseStream, WebRTCOfferStream, WebRTCAnswerStream, ConnectionProvider
 from teleoprtc.tracks import TiciVideoStreamTrack, TiciTrackWrapper
 
@@ -19,6 +21,7 @@ class WebRTCOfferBuilder(WebRTCStreamBuilder):
     self.requested_audio = False
     self.audio_tracks: List[object] = []
     self.messaging_enabled = False
+    self.data_channel_init: Optional[DataChannelInit] = None
 
   def offer_to_receive_video_stream(self, camera_type: str):
     assert camera_type in ["driver", "wideRoad", "road"]
@@ -31,8 +34,9 @@ class WebRTCOfferBuilder(WebRTCStreamBuilder):
     assert len(self.audio_tracks) == 0
     self.audio_tracks = [track]
 
-  def add_messaging(self):
+  def add_messaging(self, data_channel_init: Optional[DataChannelInit] = None):
     self.messaging_enabled = True
+    self.data_channel_init = data_channel_init
 
   def stream(self) -> WebRTCBaseStream:
     return WebRTCOfferStream(
@@ -42,6 +46,7 @@ class WebRTCOfferBuilder(WebRTCStreamBuilder):
       video_producer_tracks=[],
       audio_producer_tracks=self.audio_tracks,
       should_add_data_channel=self.messaging_enabled,
+      data_channel_init=self.data_channel_init,
       bind_address=self.bind_address,
     )
 
