@@ -353,8 +353,8 @@ class WebRTCBaseStream(abc.ABC):
       with contextlib.suppress(asyncio.CancelledError):
         await task
     self._sender_tasks.clear()
+    # close() resets callbacks internally; resetting them concurrently from Python can deadlock on the GIL.
     self.peer_connection.close()
-    self.peer_connection.reset_callbacks()
     self.messaging_channel = None
     self.incoming_camera_tracks.clear()
     self.incoming_audio_tracks.clear()
