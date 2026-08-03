@@ -43,11 +43,8 @@ MessageHandler = Callable[[Union[bytes, str]], None]
 
 
 class WebRTCBaseStream(abc.ABC):
-  # libdatachannel resets a DataChannel's callbacks on an RTC worker. Destroying
-  # the Python wrapper concurrently resets them again while holding the GIL,
-  # which can deadlock with that worker acquiring the GIL to release callbacks.
-  # Retain closed wrappers for the daemon lifetime; the underlying channels are
-  # still closed by PeerConnection.close().
+  # destorying wrapper on close can cause deadlock
+  # TODO: upstream a fix to this
   _retained_messaging_channels: List[DataChannel] = []
   _retain_messaging_channel_on_close = False
 
@@ -425,8 +422,6 @@ class WebRTCOfferStream(WebRTCBaseStream):
 
 
 class WebRTCAnswerStream(WebRTCBaseStream):
-  # Incoming DataChannels are closed from an RTC worker when the remote offerer
-  # disconnects, which is the path affected by the callback/GIL deadlock.
   _retain_messaging_channel_on_close = True
 
   def __init__(self, session: RTCSessionDescription, *args, **kwargs):
