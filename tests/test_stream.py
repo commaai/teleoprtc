@@ -4,7 +4,7 @@ import contextlib
 
 import pytest
 
-from libdatachannel import Description
+from libdatachannel import Description, OpusRtpDepacketizer, RtcpReceivingSession
 
 from teleoprtc.builder import WebRTCOfferBuilder, WebRTCAnswerBuilder
 from teleoprtc.info import parse_info_from_offer
@@ -22,6 +22,14 @@ class OfferCapture:
 
 class DummyH264VideoStreamTrack(TiciVideoStreamTrack):
   kind = "video"
+
+  async def recv(self):
+    raise NotImplementedError()
+
+
+class DummyOpusAudioStreamTrack:
+  kind = "audio"
+  id = "audio-track"
 
   async def recv(self):
     raise NotImplementedError()
@@ -45,6 +53,40 @@ class TestOfferStream:
     info = parse_info_from_offer(capture.offer.sdp)
     assert info.expected_audio_track
     assert not info.incoming_audio_track
+
+  async def test_offer_stream_sdp_sendonly_audio(self):
+    capture = OfferCapture()
+    builder = WebRTCOfferBuilder(capture)
+    builder.add_audio_stream(DummyOpusAudioStreamTrack())
+    stream = builder.stream()
+
+    try:
+      with contextlib.suppress(Exception):
+        await stream.start()
+    finally:
+      await stream.stop()
+
+    info = parse_info_from_offer(capture.offer.sdp)
+    assert not info.expected_audio_track
+    assert info.incoming_audio_track
+
+  async def test_offer_stream_sdp_sendrecv_audio(self):
+    capture = OfferCapture()
+    builder = WebRTCOfferBuilder(capture)
+    builder.offer_to_receive_audio_stream()
+    builder.add_audio_stream(DummyOpusAudioStreamTrack())
+    stream = builder.stream()
+
+    try:
+      with contextlib.suppress(Exception):
+        await stream.start()
+    finally:
+      await stream.stop()
+
+    desc = Description(capture.offer.sdp, Description.Type.Offer)
+    audio = next(desc.media(i) for i in range(desc.media_count()) if desc.media(i).type() == "audio")
+    assert audio.direction() == Description.Direction.SendRecv
+    assert len(audio.get_ssrcs()) == 1
 
   async def test_offer_stream_sdp_channel(self):
     capture = OfferCapture()
@@ -79,6 +121,125 @@ class TestOfferStream:
 
 @pytest.mark.asyncio
 class TestAnswerStream:
+  async def test_video_answer_when_receiving_audio(self):
+    offer_sdp = """v=0
+o=- 3910274679 3910274679 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=group:BUNDLE 0 1 2
+a=msid-semantic:WMS *
+m=video 9 UDP/TLS/RTP/SAVPF 103
+c=IN IP4 0.0.0.0
+a=recvonly
+a=mid:0
+a=rtcp-mux
+a=rtpmap:103 H264/90000
+a=rtcp-fb:103 nack
+a=rtcp-fb:103 nack pli
+a=fmtp:103 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
+a=ice-ufrag:1234
+a=ice-pwd:1234
+a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
+a=setup:actpass
+m=video 9 UDP/TLS/RTP/SAVPF 103
+c=IN IP4 0.0.0.0
+a=recvonly
+a=mid:1
+a=rtcp-mux
+a=rtpmap:103 H264/90000
+a=rtcp-fb:103 nack
+a=rtcp-fb:103 nack pli
+a=fmtp:103 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
+a=ice-ufrag:1234
+a=ice-pwd:1234
+a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
+a=setup:actpass
+m=audio 9 UDP/TLS/RTP/SAVPF 111
+c=IN IP4 0.0.0.0
+a=sendonly
+a=mid:2
+a=rtcp-mux
+a=rtpmap:111 opus/48000/2
+a=ice-ufrag:1234
+a=ice-pwd:1234
+a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
+a=setup:actpass"""
+    builder = WebRTCAnswerBuilder(offer_sdp)
+    builder.offer_to_receive_audio_stream()
+    builder.add_video_stream("road", DummyH264VideoStreamTrack("road", 0.05))
+    stream = builder.stream()
+    try:
+      answer = await stream.start()
+      desc = Description(answer.sdp, Description.Type.Answer)
+      videos = [desc.media(i) for i in range(desc.media_count()) if desc.media(i).type() == "video"]
+      audio = next(desc.media(i) for i in range(desc.media_count()) if desc.media(i).type() == "audio")
+      assert [video.direction() for video in videos] == [Description.Direction.SendOnly, Description.Direction.Inactive]
+      assert len(videos[0].get_ssrcs()) == 1
+      assert len(videos[1].get_ssrcs()) == 0
+      assert audio.direction() == Description.Direction.RecvOnly
+      assert stream.has_incoming_audio_track()
+      handler = stream.get_incoming_audio_track().get_media_handler()
+      assert isinstance(handler, OpusRtpDepacketizer)
+      assert isinstance(handler.next(), RtcpReceivingSession)
+    finally:
+      await stream.stop()
+
+  async def test_receive_opus_audio_track(self):
+    offer_sdp = """v=0
+o=- 1 1 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=group:BUNDLE audio
+m=audio 9 UDP/TLS/RTP/SAVPF 111
+c=IN IP4 0.0.0.0
+a=sendonly
+a=mid:audio
+a=rtpmap:111 opus/48000/2
+a=ice-ufrag:1234
+a=ice-pwd:1234
+a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
+a=setup:actpass"""
+    builder = WebRTCAnswerBuilder(offer_sdp)
+    builder.offer_to_receive_audio_stream()
+    stream = builder.stream()
+    try:
+      answer = await stream.start()
+      desc = Description(answer.sdp, Description.Type.Answer)
+      audio = next(desc.media(i) for i in range(desc.media_count()) if desc.media(i).type() == "audio")
+      assert audio.direction() == Description.Direction.RecvOnly
+      assert stream.has_incoming_audio_track()
+    finally:
+      await stream.stop()
+
+  async def test_opus_audio_track(self):
+    offer_sdp = """v=0
+o=- 1 1 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=group:BUNDLE audio
+m=audio 9 UDP/TLS/RTP/SAVPF 111 0
+c=IN IP4 0.0.0.0
+a=recvonly
+a=mid:audio
+a=rtpmap:111 opus/48000/2
+a=rtpmap:0 PCMU/8000
+a=ice-ufrag:1234
+a=ice-pwd:1234
+a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
+a=setup:actpass"""
+    builder = WebRTCAnswerBuilder(offer_sdp)
+    builder.add_audio_stream(DummyOpusAudioStreamTrack())
+    stream = builder.stream()
+    try:
+      answer = await stream.start()
+      desc = Description(answer.sdp, Description.Type.Answer)
+      audio = next(desc.media(i) for i in range(desc.media_count()) if desc.media(i).type() == "audio")
+      assert audio.direction() == Description.Direction.SendOnly
+      assert audio.rtp_map(audio.payload_types()[0]).format.lower() == "opus"
+      assert len(audio.get_ssrcs()) == 1
+    finally:
+      await stream.stop()
+
   async def test_codec_preference(self):
     offer_sdp = """v=0
 o=- 3910274679 3910274679 IN IP4 0.0.0.0

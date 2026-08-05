@@ -14,9 +14,12 @@ from libdatachannel import (
   H264RtpPacketizer,
   IceServer,
   NalUnit,
+  OpusRtpPacketizer,
+  OpusRtpDepacketizer,
   PeerConnection,
   PliHandler,
   RtcpNackResponder,
+  RtcpReceivingSession,
   RtcpSrReporter,
   RtpPacketizationConfig,
   Track,
@@ -76,8 +79,10 @@ class WebRTCBaseStream(abc.ABC):
     self.messaging_channel: Optional[DataChannel] = None
     self.incoming_message_handlers: List[MessageHandler] = []
     self._consumer_tracks: List[Track] = []
+    self._offered_tracks: Dict[str, Track] = {}
+    self._incoming_audio_handlers: List[Any] = []
     self._sender_tasks: List[asyncio.Task] = []
-    self._track_state: List[Tuple[Track, TiciVideoStreamTrack, RtpPacketizationConfig]] = []
+    self._track_state: List[Tuple[Track, Any, RtpPacketizationConfig]] = []
     self._receiver_reports: Dict[str, RtcpReceiverReport] = {}
     self._receiver_report_tracks: Dict[str, Tuple[Track, int]] = {}
 
@@ -125,8 +130,16 @@ class WebRTCBaseStream(abc.ABC):
       media = Description.Audio("audio", Description.Direction.RecvOnly)
       media.add_opus_codec(111)
       track = self.peer_connection.add_track(media)
+      self._set_incoming_audio_handlers(track)
       self._consumer_tracks.append(track)
       self.incoming_audio_tracks.append(track)
+
+  def _set_incoming_audio_handlers(self, track: Track) -> None:
+    depacketizer = OpusRtpDepacketizer()
+    rtcp_session = RtcpReceivingSession()
+    depacketizer.add_to_chain(rtcp_session)
+    track.set_media_handler(depacketizer)
+    self._incoming_audio_handlers.extend((depacketizer, rtcp_session))
 
   def _find_offer_video(self, remote_sdp: str, used_mids: set[str]) -> Tuple[str, int]:
     desc = Description(remote_sdp, Description.Type.Offer)
@@ -140,6 +153,31 @@ class WebRTCBaseStream(abc.ABC):
           if rtp_map is not None and rtp_map.format.upper() == "H264":
             return media.mid(), payload_type
     raise ValueError("Remote SDP does not offer H264 video")
+
+  def _find_offer_audio(self, remote_sdp: str, used_mids: set[str]) -> Tuple[str, int, Description.Direction]:
+    desc = Description(remote_sdp, Description.Type.Offer)
+    for i in range(desc.media_count()):
+      media = desc.media(i)
+      if media is None or media.type() != "audio" or media.mid() in used_mids:
+        continue
+      if media.direction() not in (Description.Direction.RecvOnly, Description.Direction.SendRecv):
+        continue
+      for payload_type in media.payload_types():
+        with contextlib.suppress(ValueError):
+          rtp_map = media.rtp_map(payload_type)
+          if rtp_map is not None and rtp_map.format.upper() == "OPUS":
+            return media.mid(), payload_type, media.direction()
+    raise ValueError("Remote SDP does not offer Opus audio")
+
+  def _find_track_h264(self, track: Track) -> Tuple[int, str, Optional[str]]:
+    media = track.description()
+    for payload_type in media.payload_types():
+      with contextlib.suppress(ValueError):
+        rtp_map = media.rtp_map(payload_type)
+        if rtp_map.format.upper() == "H264":
+          profile = rtp_map.fmtps[0] if rtp_map.fmtps else None
+          return payload_type, rtp_map.format, profile
+    raise ValueError("Track does not offer H264 video")
 
   def _make_video_media(self, track: TiciVideoStreamTrack, remote_sdp: str, used_mids: set[str]) -> Tuple[Description.Video, int, int, str]:
     mid, payload_type = self._find_offer_video(remote_sdp, used_mids)
@@ -156,7 +194,13 @@ class WebRTCBaseStream(abc.ABC):
     used_mids: set[str] = set()
     for track in self.outgoing_video_tracks:
       media, ssrc, payload_type, cname = self._make_video_media(track, remote_sdp or "", used_mids)
-      rtc_track = self.peer_connection.add_track(media)
+      rtc_track = self._offered_tracks.pop(media.mid(), None)
+      if rtc_track is None:
+        rtc_track = self.peer_connection.add_track(media)
+      else:
+        offered_media = rtc_track.description()
+        offered_media.add_ssrc(ssrc, cname, f"stream-{random.getrandbits(32):08x}", track.id)
+        rtc_track.set_description(offered_media)
 
       rtp_config = RtpPacketizationConfig(ssrc, cname, payload_type, H264RtpPacketizer.CLOCK_RATE)
       rtp_config.start_timestamp = random.randint(0, 0xFFFFFFFF)
@@ -174,8 +218,49 @@ class WebRTCBaseStream(abc.ABC):
       self._receiver_report_tracks[camera_type] = (rtc_track, ssrc)
       self._track_state.append((rtc_track, track, rtp_config))
 
-    if self.outgoing_audio_tracks:
-      raise NotImplementedError("Audio producer tracks are not implemented with libdatachannel")
+    for track in self.outgoing_audio_tracks:
+      if remote_sdp is None:
+        mid, payload_type = "audio", 111
+        direction = Description.Direction.SendRecv if self.expected_incoming_audio else Description.Direction.SendOnly
+      else:
+        mid, payload_type, offered_direction = self._find_offer_audio(remote_sdp, used_mids)
+        direction = Description.Direction.SendRecv if offered_direction == Description.Direction.SendRecv else Description.Direction.SendOnly
+      used_mids.add(mid)
+
+      ssrc = random.randint(1, 0xFFFFFFFF)
+      cname = f"teleoprtc-{random.getrandbits(32):08x}"
+      stream_id = f"stream-{random.getrandbits(32):08x}"
+      media = Description.Audio(mid, direction)
+      media.add_opus_codec(payload_type)
+      media.add_ssrc(ssrc, cname, stream_id, track.id)
+      rtc_track = self._offered_tracks.pop(mid, None)
+      if rtc_track is not None:
+        rtc_track.set_description(media)
+      elif remote_sdp is None and self.expected_incoming_audio:
+        rtc_track = self.incoming_audio_tracks[0]
+        rtc_track.set_description(media)
+      else:
+        rtc_track = self.peer_connection.add_track(media)
+
+      rtp_config = RtpPacketizationConfig(ssrc, cname, payload_type, OpusRtpPacketizer.DEFAULT_CLOCK_RATE)
+      rtp_config.start_timestamp = random.randint(0, 0xFFFFFFFF)
+      rtp_config.timestamp = rtp_config.start_timestamp
+      rtp_config.sequence_number = random.randint(0, 0xFFFF)
+
+      packetizer = OpusRtpPacketizer(rtp_config)
+      packetizer.add_to_chain(RtcpSrReporter(rtp_config))
+      packetizer.add_to_chain(RtcpNackResponder())
+      rtc_track.set_media_handler(packetizer)
+      self._track_state.append((rtc_track, track, rtp_config))
+
+    for mid, rtc_track in self._offered_tracks.items():
+      if rtc_track.description().type() == "video":
+        # libdatachannel creates local tracks for every remote recvonly section.
+        # Keep compatibility video MIDs valid, but do not advertise empty streams.
+        payload_type, codec, profile = self._find_track_h264(rtc_track)
+        media = Description.Video(mid, Description.Direction.Inactive)
+        media.add_video_codec(payload_type, codec, profile)
+        rtc_track.set_description(media)
 
   def _add_messaging_channel(self, channel: Optional[DataChannel] = None):
     if channel is None:
@@ -226,14 +311,19 @@ class WebRTCBaseStream(abc.ABC):
 
   def _on_incoming_track(self, track: Track):
     self._log_debug("got track: %s", track.mid())
-    try:
-      camera_type, _ = parse_video_track_id(track.mid())
-    except ValueError:
-      camera_type = track.mid()
-    if camera_type in self.expected_incoming_camera_types:
-      self.incoming_camera_tracks[camera_type] = track
-    elif self.expected_incoming_audio:
+    # An offer-created track may be the same transceiver used by an outgoing
+    # producer. Reusing it avoids adding a duplicate track with the same MID.
+    self._offered_tracks[track.mid()] = track
+    if track.description().type() == "audio" and self.expected_incoming_audio:
+      self._set_incoming_audio_handlers(track)
       self.incoming_audio_tracks.append(track)
+    elif track.description().type() == "video":
+      try:
+        camera_type, _ = parse_video_track_id(track.mid())
+      except ValueError:
+        camera_type = track.mid()
+      if camera_type in self.expected_incoming_camera_types:
+        self.incoming_camera_tracks[camera_type] = track
     self._on_after_media()
 
   def _on_incoming_datachannel(self, channel: DataChannel):
@@ -312,7 +402,7 @@ class WebRTCBaseStream(abc.ABC):
     if self.peer_connection.gathering_state() != PeerConnection.GatheringState.Complete:
       await self.gathering_complete_event.wait()
 
-  async def _send_track_loop(self, rtc_track: Track, producer_track: TiciVideoStreamTrack, rtp_config: RtpPacketizationConfig):
+  async def _send_track_loop(self, rtc_track: Track, producer_track: Any, rtp_config: RtpPacketizationConfig):
     while True:
       if not rtc_track.is_open():
         await asyncio.sleep(0.01)
@@ -325,6 +415,9 @@ class WebRTCBaseStream(abc.ABC):
           continue
 
         pts = int(packet.pts or 0)
+        time_base = getattr(packet, "time_base", None)
+        if time_base is not None:
+          pts = int(pts * time_base * rtp_config.clock_rate)
         timestamp = (rtp_config.start_timestamp + pts) & 0xFFFFFFFF
         rtc_track.send_frame(data, FrameInfo(timestamp))
       except asyncio.CancelledError:
@@ -384,6 +477,8 @@ class WebRTCBaseStream(abc.ABC):
     self.incoming_camera_tracks.clear()
     self.incoming_audio_tracks.clear()
     self._consumer_tracks.clear()
+    self._offered_tracks.clear()
+    self._incoming_audio_handlers.clear()
     self._track_state.clear()
     self._receiver_reports.clear()
     self._receiver_report_tracks.clear()
@@ -403,6 +498,7 @@ class WebRTCOfferStream(WebRTCBaseStream):
     self._add_consumer_transceivers()
     if self.should_add_data_channel:
       self._add_messaging_channel()
+    self._add_producer_tracks()
 
     self.peer_connection.set_local_description(Description.Type.Offer)
     await self._wait_for_gathering_complete()
