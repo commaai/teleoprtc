@@ -43,6 +43,11 @@ MessageHandler = Callable[[Union[bytes, str]], None]
 
 
 class WebRTCBaseStream(abc.ABC):
+  # destorying wrapper on close can cause deadlock
+  # TODO: upstream a fix to this
+  _retained_messaging_channels: List[DataChannel] = []
+  _retain_messaging_channel_on_close = False
+
   def __init__(self,
                consumed_camera_types: List[str],
                consume_audio: bool,
@@ -181,12 +186,31 @@ class WebRTCBaseStream(abc.ABC):
       for handler in list(self.incoming_message_handlers):
         self._call_soon_threadsafe(handler, message)
 
+    def on_open():
+      self._set_event(self.messaging_channel_ready_event)
+
+    def on_closed():
+      self._set_event(self.connection_stopped_event)
+
     channel.on_message(on_message)
-    channel.on_open(lambda: self._set_event(self.messaging_channel_ready_event))
-    channel.on_closed(lambda: self._set_event(self.connection_stopped_event))
+    channel.on_open(on_open)
+    channel.on_closed(on_closed)
     if channel.is_open():
       self._set_event(self.messaging_channel_ready_event)
     self._on_after_media()
+
+  def _retain_messaging_channel(self) -> None:
+    if self.messaging_channel is None:
+      return
+
+    # No native callback can be running before a remote description is set.
+    if not self.messaging_channel_ready_event.is_set() and self.peer_connection.remote_description() is None:
+      self.messaging_channel = None
+      return
+
+    if self._retain_messaging_channel_on_close:
+      self._retained_messaging_channels.append(self.messaging_channel)
+    self.messaging_channel = None
 
   def _on_connectionstatechange(self, state: PeerConnection.State):
     self._log_debug("connection state is %s", state)
@@ -355,8 +379,8 @@ class WebRTCBaseStream(abc.ABC):
       with contextlib.suppress(asyncio.CancelledError):
         await task
     self._sender_tasks.clear()
+    self._retain_messaging_channel()
     self.peer_connection.close()
-    self.messaging_channel = None
     self.incoming_camera_tracks.clear()
     self.incoming_audio_tracks.clear()
     self._consumer_tracks.clear()
@@ -398,6 +422,8 @@ class WebRTCOfferStream(WebRTCBaseStream):
 
 
 class WebRTCAnswerStream(WebRTCBaseStream):
+  _retain_messaging_channel_on_close = True
+
   def __init__(self, session: RTCSessionDescription, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self.session = session

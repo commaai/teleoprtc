@@ -62,6 +62,20 @@ class TestOfferStream:
     info = parse_info_from_offer(capture.offer.sdp)
     assert info.incoming_datachannel
 
+  async def test_answer_side_messaging_channel_wrapper_retained_after_stop(self):
+    stream = WebRTCOfferBuilder(OfferCapture()).stream()
+    stream._retain_messaging_channel_on_close = True
+    channel = stream.peer_connection.create_data_channel("data")
+    stream.messaging_channel = channel
+    stream.messaging_channel_ready_event.set()
+
+    try:
+      await stream.stop()
+      assert stream.messaging_channel is None
+      assert stream._retained_messaging_channels[-1] is channel
+    finally:
+      stream._retained_messaging_channels.pop()
+
 
 @pytest.mark.asyncio
 class TestAnswerStream:
