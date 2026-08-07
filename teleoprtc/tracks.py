@@ -27,11 +27,13 @@ class TiciVideoStreamTrack:
   """
   kind = "video"
 
-  def __init__(self, camera_type: str, dt: float, time_base: fractions.Fraction = VIDEO_TIME_BASE, clock_rate: int = VIDEO_CLOCK_RATE):
+  def __init__(self, camera_type: str, dt: float, time_base: fractions.Fraction = VIDEO_TIME_BASE, clock_rate: int = VIDEO_CLOCK_RATE,
+               h264_profile: str | None = None):
     assert camera_type in ["driver", "wideRoad", "road"]
     self._id: str = video_track_id(camera_type, str(uuid.uuid4()))
     self._time_base: fractions.Fraction = time_base
     self._clock_rate: int = clock_rate
+    self.h264_profile = h264_profile
     self._logger = logging.getLogger("WebRTCStream")
     self.readyState = "live"
 
@@ -58,7 +60,7 @@ class TiciTrackWrapper(TiciVideoStreamTrack):
   """
   def __init__(self, camera_type: str, track: Any):
     assert track.kind == "video"
-    super().__init__(camera_type, getattr(track, "_dt", 0.05))
+    super().__init__(camera_type, getattr(track, "_dt", 0.05), h264_profile=getattr(track, "h264_profile", None))
     self._id = video_track_id(camera_type, track.id)
     self._track = track
 

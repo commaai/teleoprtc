@@ -148,7 +148,10 @@ class WebRTCBaseStream(abc.ABC):
     cname = f"teleoprtc-{random.getrandbits(32):08x}"
     stream_id = f"stream-{random.getrandbits(32):08x}"
     media = Description.Video(mid, Description.Direction.SendOnly)
-    media.add_h264_codec(payload_type)
+    if track.h264_profile is None:
+      media.add_h264_codec(payload_type)
+    else:
+      media.add_h264_codec(payload_type, track.h264_profile)
     media.add_ssrc(ssrc, cname, stream_id, track.id)
     return media, ssrc, payload_type, cname
 

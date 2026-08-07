@@ -126,6 +126,31 @@ a=setup:actpass"""
     finally:
       await stream.stop()
 
+  async def test_custom_h264_profile(self):
+    offer_sdp = """v=0
+o=- 1 1 IN IP4 0.0.0.0
+s=-
+t=0 0
+a=group:BUNDLE 0
+m=video 9 UDP/TLS/RTP/SAVPF 99
+c=IN IP4 0.0.0.0
+a=recvonly
+a=mid:0
+a=rtpmap:99 H264/90000
+a=ice-ufrag:1234
+a=ice-pwd:1234
+a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D2:92:C5:97:01:7B:2E:57:C9:A3:13:00:4A
+a=setup:actpass"""
+    profile = "profile-level-id=42e028;packetization-mode=1;level-asymmetry-allowed=1"
+    builder = WebRTCAnswerBuilder(offer_sdp)
+    builder.add_video_stream("road", DummyH264VideoStreamTrack("road", 0.05, h264_profile=profile))
+    stream = builder.stream()
+    try:
+      answer = await stream.start()
+      assert f"a=fmtp:99 {profile}" in answer.sdp
+    finally:
+      await stream.stop()
+
   async def test_fail_if_preferred_codec_not_in_offer(self):
     offer_sdp = """v=0
 o=- 3910274679 3910274679 IN IP4 0.0.0.0
@@ -188,8 +213,12 @@ a=fingerprint:sha-256 15:F3:F0:23:67:44:EE:2C:AA:8C:D9:50:95:26:42:7C:67:EA:1F:D
 a=setup:actpass"""
 
     builder = WebRTCAnswerBuilder(offer_sdp)
-    builder.add_video_stream("road", DummyH264VideoStreamTrack("road", 0.05))
-    builder.add_video_stream("wideRoad", DummyH264VideoStreamTrack("wideRoad", 0.05))
+    profiles = [
+      "profile-level-id=42e028;packetization-mode=1;level-asymmetry-allowed=1",
+      "profile-level-id=42e01f;packetization-mode=1;level-asymmetry-allowed=1",
+    ]
+    builder.add_video_stream("road", DummyH264VideoStreamTrack("road", 0.05, h264_profile=profiles[0]))
+    builder.add_video_stream("wideRoad", DummyH264VideoStreamTrack("wideRoad", 0.05, h264_profile=profiles[1]))
     stream = builder.stream()
     try:
       answer = await stream.start()
@@ -202,6 +231,8 @@ a=setup:actpass"""
           video_ssrcs.extend(media.get_ssrcs())
       assert len(video_ssrcs) == 2
       assert len(set(video_ssrcs)) == 2
+      video_sections = [section for section in answer.sdp.split("m=video")[1:]]
+      assert all(f"a=fmtp:99 {profile}" in section for profile, section in zip(profiles, video_sections, strict=True))
     finally:
       await stream.stop()
 
