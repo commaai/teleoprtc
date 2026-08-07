@@ -12,9 +12,10 @@ class WebRTCStreamBuilder(abc.ABC):
 
 
 class WebRTCOfferBuilder(WebRTCStreamBuilder):
-  def __init__(self, connection_provider: ConnectionProvider, bind_address: Optional[str] = None):
+  def __init__(self, connection_provider: ConnectionProvider, bind_address: Optional[str] = None, use_stun: bool = True):
     self.connection_provider = connection_provider
     self.bind_address = bind_address
+    self.use_stun = use_stun
     self.requested_camera_types: List[str] = []
     self.requested_audio = False
     self.audio_tracks: List[object] = []
@@ -43,13 +44,15 @@ class WebRTCOfferBuilder(WebRTCStreamBuilder):
       audio_producer_tracks=self.audio_tracks,
       should_add_data_channel=self.messaging_enabled,
       bind_address=self.bind_address,
+      use_stun=self.use_stun,
     )
 
 
 class WebRTCAnswerBuilder(WebRTCStreamBuilder):
-  def __init__(self, offer_sdp: str, bind_address: Optional[str] = None):
+  def __init__(self, offer_sdp: str, bind_address: Optional[str] = None, use_stun: bool = True):
     self.offer_sdp = offer_sdp
     self.bind_address = bind_address
+    self.use_stun = use_stun
     self.video_tracks: Dict[str, TiciVideoStreamTrack] = {}
     self.requested_audio = False
     self.audio_tracks: List[object] = []
@@ -78,4 +81,5 @@ class WebRTCAnswerBuilder(WebRTCStreamBuilder):
       audio_producer_tracks=self.audio_tracks,
       should_add_data_channel=False,
       bind_address=self.bind_address,
+      use_stun=self.use_stun,
     )

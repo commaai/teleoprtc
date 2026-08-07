@@ -54,11 +54,12 @@ class WebRTCBaseStream(abc.ABC):
                video_producer_tracks: List[TiciVideoStreamTrack],
                audio_producer_tracks: List[Any],
                should_add_data_channel: bool,
-               bind_address: Optional[str] = None):
+               bind_address: Optional[str] = None,
+               use_stun: bool = True):
     config = Configuration()
     config.force_media_transport = True
     config.disable_auto_negotiation = True
-    config.ice_servers = [IceServer("stun:stun.l.google.com:19302")]
+    config.ice_servers = [IceServer("stun:stun.l.google.com:19302")] if use_stun else []
     if bind_address is not None:
       config.bind_address = bind_address
 
