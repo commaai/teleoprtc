@@ -250,7 +250,19 @@ class WebRTCBaseStream(abc.ABC):
       packetizer = OpusRtpPacketizer(rtp_config)
       packetizer.add_to_chain(RtcpSrReporter(rtp_config))
       packetizer.add_to_chain(RtcpNackResponder())
-      rtc_track.set_media_handler(packetizer)
+      if direction == Description.Direction.SendRecv:
+        # MediaHandler runs outgoing chains front-to-back and incoming chains
+        # back-to-front. Put receive handlers first so incoming RTP is handled
+        # by sender RTCP handlers while still packetized, then depacketized as
+        # the final operation before delivery to Track.receive().
+        depacketizer = OpusRtpDepacketizer()
+        rtcp_session = RtcpReceivingSession()
+        depacketizer.add_to_chain(rtcp_session)
+        depacketizer.add_to_chain(packetizer)
+        rtc_track.set_media_handler(depacketizer)
+        self._incoming_audio_handlers.extend((depacketizer, rtcp_session))
+      else:
+        rtc_track.set_media_handler(packetizer)
       self._track_state.append((rtc_track, track, rtp_config))
 
     for mid, rtc_track in self._offered_tracks.items():
