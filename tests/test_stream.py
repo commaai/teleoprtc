@@ -203,7 +203,7 @@ a=setup:actpass"""
           video_ssrcs.extend(media.get_ssrcs())
       assert len(video_ssrcs) == 2
       assert len(set(video_ssrcs)) == 2
-      video_sections = [section for section in answer.sdp.split("m=video")[1:]]
+      video_sections = list(answer.sdp.split("m=video")[1:])
       assert all(f"a=fmtp:99 {H264_FORMAT_PARAMETERS}" in section for section in video_sections)
     finally:
       await stream.stop()
