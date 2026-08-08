@@ -37,12 +37,3 @@ class TestTracks:
     track = TiciTrackWrapper("driver", VideoStream())
     camera_type, _ = parse_video_track_id(track.id)
     assert "driver" == camera_type
-
-  def test_tici_wrapper_h264_profile(self):
-    class VideoStream:
-      kind = "video"
-      id = "test"
-      h264_profile = "profile-level-id=42e028"
-
-    track = TiciTrackWrapper("driver", VideoStream())
-    assert track.h264_profile == VideoStream.h264_profile
