@@ -26,9 +26,6 @@ from teleoprtc.decoder import RtcpReceiverReport, _decode_receiver_reports
 from teleoprtc.tracks import TiciVideoStreamTrack, parse_video_track_id
 
 
-H264_FORMAT_PARAMETERS = "profile-level-id=64001f;packetization-mode=1;level-asymmetry-allowed=1"
-
-
 @dataclasses.dataclass
 class StreamingOffer:
   sdp: str
@@ -120,7 +117,7 @@ class WebRTCBaseStream(abc.ABC):
   def _add_consumer_transceivers(self):
     for camera_type in self.expected_incoming_camera_types:
       media = Description.Video(camera_type, Description.Direction.RecvOnly)
-      media.add_h264_codec(96, H264_FORMAT_PARAMETERS)
+      media.add_h264_codec(96)
       track = self.peer_connection.add_track(media)
       self._consumer_tracks.append(track)
       self.incoming_camera_tracks[camera_type] = track
@@ -151,7 +148,7 @@ class WebRTCBaseStream(abc.ABC):
     cname = f"teleoprtc-{random.getrandbits(32):08x}"
     stream_id = f"stream-{random.getrandbits(32):08x}"
     media = Description.Video(mid, Description.Direction.SendOnly)
-    media.add_h264_codec(payload_type, H264_FORMAT_PARAMETERS)
+    media.add_h264_codec(payload_type)
     media.add_ssrc(ssrc, cname, stream_id, track.id)
     return media, ssrc, payload_type, cname
 
