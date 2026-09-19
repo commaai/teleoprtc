@@ -129,7 +129,7 @@ class WebRTCBaseStream(abc.ABC):
       self._consumer_tracks.append(track)
       self.incoming_audio_tracks.append(track)
 
-  def _find_offer_video(self, remote_sdp: str, used_mids: set[str]) -> Tuple[str, int]:
+  def _find_offer_video(self, remote_sdp: str, used_mids: set[str], required_profile: Optional[str] = None, allow_lower_level: bool = False) -> Tuple[str, int]:
     desc = Description(remote_sdp, Description.Type.Offer)
     for i in range(desc.media_count()):
       media = desc.media(i)
@@ -139,27 +139,81 @@ class WebRTCBaseStream(abc.ABC):
         with contextlib.suppress(ValueError):
           rtp_map = media.rtp_map(payload_type)
           if rtp_map is not None and rtp_map.format.upper() == "H264":
+            if required_profile is not None:
+              # Keep profile/packetization compatibility. Bench tracks may opt into
+              # sending their native cadence despite a conservative offered level.
+              compatible = False
+              for fmtp in rtp_map.fmtps:
+                params = dict(part.strip().split("=", 1) for part in fmtp.split(";") if "=" in part)
+                profile = params.get("profile-level-id", "").lower()
+                if (params.get("packetization-mode") == "1" and len(profile) == 6 and
+                    profile[:4] == required_profile[:4] and (allow_lower_level or int(profile[4:], 16) >= int(required_profile[4:], 16))):
+                  compatible = True
+              if not compatible:
+                continue
             return media.mid(), payload_type
-    raise ValueError("Remote SDP does not offer H264 video")
+    raise ValueError(f"Remote SDP does not offer compatible H264 video (required profile: {required_profile})")
 
   def _make_video_media(self, track: TiciVideoStreamTrack, remote_sdp: str, used_mids: set[str]) -> Tuple[Description.Video, int, int, str]:
-    mid, payload_type = self._find_offer_video(remote_sdp, used_mids)
+    profile = getattr(track, "h264_profile_level_id", None)
+    allow_lower_level = getattr(track, "h264_allow_lower_level", False)
+    mid, payload_type = self._find_offer_video(remote_sdp, used_mids, profile, allow_lower_level)
+    if profile is not None and allow_lower_level:
+      # Answer within the offered level so browser setRemoteDescription accepts
+      # the codec. The encoded SPS and capture cadence remain unchanged.
+      offer = Description(remote_sdp, Description.Type.Offer)
+      for i in range(offer.media_count()):
+        offered_media = offer.media(i)
+        if offered_media is None or offered_media.mid() != mid:
+          continue
+        for fmtp in offered_media.rtp_map(payload_type).fmtps:
+          params = dict(part.strip().split("=", 1) for part in fmtp.split(";") if "=" in part)
+          offered_profile = params.get("profile-level-id", "").lower()
+          if len(offered_profile) == 6 and offered_profile[:4] == profile[:4]:
+            profile = profile[:4] + f"{min(int(profile[4:], 16), int(offered_profile[4:], 16)):02x}"
+            break
     used_mids.add(mid)
     ssrc = random.randint(1, 0xFFFFFFFF)
     cname = f"teleoprtc-{random.getrandbits(32):08x}"
     stream_id = f"stream-{random.getrandbits(32):08x}"
     media = Description.Video(mid, Description.Direction.SendOnly)
-    media.add_h264_codec(payload_type)
+    if profile is None:
+      media.add_h264_codec(payload_type)
+    else:
+      media.add_h264_codec(payload_type, f"profile-level-id={profile};packetization-mode=1;level-asymmetry-allowed=1")
     media.add_ssrc(ssrc, cname, stream_id, track.id)
     return media, ssrc, payload_type, cname
+
+  @staticmethod
+  def _negotiate_video_orientation(media: Description.Video, remote_sdp: str) -> int:
+    offer = Description(remote_sdp, Description.Type.Offer)
+    for i in range(offer.media_count()):
+      offered_media = offer.media(i)
+      if offered_media is None or offered_media.mid() != media.mid() or offered_media.type() != "video":
+        continue
+      for line in str(offered_media).splitlines():
+        if not line.startswith("a=extmap:"):
+          continue
+        extension = Description.Entry.ExtMap(line[len("a=extmap:"):])
+        if (extension.uri == "urn:3gpp:video-orientation" and 1 <= extension.id <= 14 and
+            extension.direction in (Description.Direction.Unknown, Description.Direction.SendRecv, Description.Direction.RecvOnly)):
+          # Use the offered ID, scoped to this video m-line. The packetizer's
+          # one-byte extension format supports IDs 1..14.
+          media.add_ext_map(Description.Entry.ExtMap(extension.id, extension.uri, Description.Direction.SendOnly))
+          return extension.id
+    return 0
 
   def _add_producer_tracks(self, remote_sdp: Optional[str] = None):
     used_mids: set[str] = set()
     for track in self.outgoing_video_tracks:
       media, ssrc, payload_type, cname = self._make_video_media(track, remote_sdp or "", used_mids)
+      orientation = getattr(track, "video_orientation", 0)
+      orientation_id = self._negotiate_video_orientation(media, remote_sdp or "") if orientation else 0
       rtc_track = self.peer_connection.add_track(media)
 
       rtp_config = RtpPacketizationConfig(ssrc, cname, payload_type, H264RtpPacketizer.CLOCK_RATE)
+      rtp_config.video_orientation_id = orientation_id
+      rtp_config.video_orientation = orientation if orientation_id else 0
       rtp_config.start_timestamp = random.randint(0, 0xFFFFFFFF)
       rtp_config.timestamp = rtp_config.start_timestamp
       rtp_config.sequence_number = random.randint(0, 0xFFFF)
